@@ -21,3 +21,8 @@ for A in {0..29}; do
   	sleep 5s;
 done;
 
+# No. Batches
+for A in 0 1 2 3 4; do
+	sbatch mpirun.slurm $A;
+  	sleep 5s;
+done;

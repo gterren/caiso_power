@@ -61,7 +61,7 @@ SL = int(sys.argv[9])
 # Dense learning model index
 DL = int(sys.argv[10])
 # Define identification experiment key
-key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}_gpytorch_v2'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, SL, DL)
+key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}_gpytorch_v13'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, SL, DL)
 print(key)
 
 i_theta = int(sys.argv[11])
@@ -86,7 +86,7 @@ Y_ac_, Y_fc_, X_ac_, X_fc_, Z_, g_sl_, g_dl_ = _structure_dataset(data_, i_resou
 #print(Y_ac_.shape, Y_fc_.shape)
 del data_
 
-# Generate spare learning dataset
+# Generate sparse learning dataset
 X_sl_, Y_sl_, g_sl_ = _dense_learning_dataset(X_ac_, Y_ac_, Z_, g_sl_, N_lags, AR = 0, CS = 0, TM = 1)
 #print(X_sl_.shape, Y_sl_.shape, g_sl_.shape)
 # Split data in training and testing
@@ -141,12 +141,12 @@ thetas_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lamb
 i_theta_ = [i_theta, i_theta, i_theta]
 t_init   = time.time()
 print(i_theta_)
-# Generate spase learning training and testing dataset in the correct format
+# Generate sparse learning training and testing dataset in the correct format
 X_sl_tr_test_, Y_sl_tr_test_ = _sparse_learning_dataset(X_sl_tr_, Y_sl_tr_)
 X_sl_ts_test_, Y_sl_ts_test_ = _sparse_learning_dataset(X_sl_ts_, Y_sl_ts_)
 #print(X_sl_tr_test_.shape, Y_sl_tr_test_.shape, X_sl_ts_test_.shape, Y_sl_ts_test_.shape)
 
-# Standardize spase learning dataset
+# Standardize sparse learning dataset
 X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_tr_test_, Y_sl_tr_test_, X_sl_ts_test_, x_sl_stnd, y_sl_stnd)
 #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
 
@@ -157,7 +157,7 @@ if SL != 4:
     Y_sl_ts_hat_test_ = np.zeros(Y_sl_ts_test_.shape)
     # Train independent multi-task models for each hour
     for tsk in range(Y_sl_ts_test_.shape[1]):
-        print(tsk, X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape)
+        print(tsk, thetas_[i_theta_[tsk]], X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape)
 
         # Lasso (linear regression with l_1 norm applied to the coefficients.)
         if SL == 0: _SL = Lasso(alpha    = thetas_[i_theta_[tsk]][0],
@@ -181,7 +181,7 @@ if SL != 4:
                                      n_iter          = 1000,
                                      scale_reg       = "inverse_group_size",
                                      supress_warning = True,
-                                     tol             = 0.001).fit(X_sl_val_tr_stnd_, Y_sl_val_tr_stnd_[:, tsk])
+                                     tol             = 0.001).fit(X_sl_tr_stnd_, Y_sl_tr_stnd_[:, tsk])
 
         # Spare learning single-task prediction and optimal model coefficients
         Y_sl_ts_hat_test_[:, tsk], W_hat_[:, tsk] = _sparse_learning_predict(_SL, X_sl_ts_stnd_, g_sl_)
@@ -195,19 +195,20 @@ X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(
 #print(X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape)
 
 # Initialization multi-task predictive mean and standard deviation
-Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
-Y_dl_ts_hat_ = np.zeros(Y_dl_ts_.shape)
-S_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
-S_dl_ts_hat_ = np.zeros(Y_dl_ts_.shape)
-S_dl_noise_  = np.zeros((Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-# Train independent multi-task models for each hour
-for tsk in range(Y_dl_ts_hat_.shape[1]):
-    # Train an expert models for each hour
-    for hrzn in range(Y_dl_ts_hat_.shape[2]):
+Y_dl_tr_hat_  = np.zeros(Y_dl_tr_.shape)
+Y_dl_ts_hat_  = np.zeros(Y_dl_ts_.shape)
+S2_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
+S2_dl_ts_hat_ = np.zeros(Y_dl_ts_.shape)
+S2_dl_noise_  = np.zeros((Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+
+# Train an expert models for each hour
+for hrzn in range(Y_dl_ts_hat_.shape[2]):
+    # Train independent multi-task models for each hour
+    for tsk in range(Y_dl_ts_hat_.shape[1]):
         # Define training and testing recursive dataset
         X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
         X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
-        print(key, thetas_[i_theta_[tsk]], hrzn, tsk, X_dl_tr_rc_.shape, X_dl_ts_rc_.shape, Y_dl_tr_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+        #print(key, thetas_[i_theta_[tsk]], hrzn, tsk, X_dl_tr_rc_.shape, X_dl_ts_rc_.shape, Y_dl_tr_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
 
         # Bayesian Linear Regression with prior on the parameters
         if DL == 0: _DL = BayesianRidge(n_iter = 2000,
@@ -221,15 +222,15 @@ for tsk in range(Y_dl_ts_hat_.shape[1]):
                                         n_iter           = 2000,
                                         tol              = 0.001).fit(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk])
         # Dense learning single-task prediction
-        Y_dl_tr_hat_[..., tsk, hrzn], S_dl_tr_hat_[..., tsk, hrzn], S_dl_noise_[tsk, hrzn]  = _dense_learning_predict(_DL, X_dl_tr_rc_, DL)
-        Y_dl_ts_hat_[..., tsk, hrzn], S_dl_ts_hat_[..., tsk, hrzn], S_dl_noise_[tsk, hrzn]  = _dense_learning_predict(_DL, X_dl_ts_rc_, DL)
+        Y_dl_tr_hat_[..., tsk, hrzn], S2_dl_tr_hat_[..., tsk, hrzn], S2_dl_noise_[tsk, hrzn] = _dense_learning_predict(_DL, X_dl_tr_rc_, DL)
+        Y_dl_ts_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn], S2_dl_noise_[tsk, hrzn] = _dense_learning_predict(_DL, X_dl_ts_rc_, DL)
 
     # Undo standardization from dense learning multi-task prediction
-    if y_dl_stnd == 1: Y_dl_tr_hat_[..., hrzn] = dl_scaler_[1][hrzn].inverse_transform(Y_dl_tr_hat_[..., hrzn])
-    if y_dl_stnd == 1: Y_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_hat_[..., hrzn])
-    if y_dl_stnd == 1: S_dl_tr_hat_[..., hrzn] = np.sqrt(dl_scaler_[1][hrzn].var_)*S_dl_tr_hat_[..., hrzn]
-    if y_dl_stnd == 1: S_dl_ts_hat_[..., hrzn] = np.sqrt(dl_scaler_[1][hrzn].var_)*S_dl_ts_hat_[..., hrzn]
-    if y_dl_stnd == 1: S_dl_noise_[..., hrzn]  = np.sqrt(dl_scaler_[1][hrzn].var_)*S_dl_noise_[..., hrzn]
+    if y_dl_stnd == 1: Y_dl_tr_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_tr_hat_[..., hrzn])
+    if y_dl_stnd == 1: Y_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_hat_[..., hrzn])
+    if y_dl_stnd == 1: S2_dl_tr_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_tr_hat_[..., hrzn]
+    if y_dl_stnd == 1: S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
+    if y_dl_stnd == 1: S2_dl_noise_[..., hrzn]  = dl_scaler_[1][hrzn].var_*S2_dl_noise_[..., hrzn]
 
 t_end = time.time() - t_init
 
@@ -237,9 +238,9 @@ t_end = time.time() - t_init
 E_dl_ = _det_metrics(Y_dl_ts_, Y_dl_ts_hat_)
 E_dl_ = np.mean(E_dl_, axis = -1)
 # Evaluate dense learning validation probabilistic metrics
-S_dl_noise_ = np.repeat(S_dl_noise_[np.newaxis, ...], S_dl_ts_hat_.shape[0], axis = 0)
-#B_dl_       = _prob_metrics(Y_dl_ts_, Y_dl_ts_hat_, S_dl_ts_hat_ + S_dl_noise_)
-B_dl_       = _prob_metrics(Y_dl_ts_, Y_dl_ts_hat_, S_dl_ts_hat_)
+S2_dl_noise_ = np.repeat(S2_dl_noise_[np.newaxis, ...], S2_dl_ts_hat_.shape[0], axis = 0)
+#B_dl_       = _prob_metrics(Y_dl_ts_, Y_dl_ts_hat_, S2_dl_ts_hat_ + S2_dl_noise_)
+B_dl_       = _prob_metrics(Y_dl_ts_, Y_dl_ts_hat_, S2_dl_ts_hat_)
 B_dl_       = np.mean(B_dl_, axis = -1)
 # Save parameter combination in .csv file
 _save_test_in_csv_file(E_dl_, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], i_resource, path_to_rst, 'DLDetTest.csv')
