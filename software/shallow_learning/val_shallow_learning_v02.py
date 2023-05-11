@@ -32,35 +32,37 @@ i_resources_ = [1]
 # Resources: [{MWD, PGE, SCE, SDGE, VEA}, {NP, SP, ZP}, {NP, SP}]
 i_assets_ = [[1, 2, 3], [0, 1, 2], [0, 1]]
 # Cross-validation configuration
-N_kfolds = 5
+N_kfolds = 3
 # Spatial masks {All, US Land, All CAISO Resources density, Resource density}
 i_mask = 3
 tau    = 0.
 N_lags = 6
 # Autoregressive series from today:
-AR = int(sys.argv[1])
+AR = 1
 # Cyclo-stationary from lagged series
-CS = int(sys.argv[2])
+CS = 1
 # Time dammy variables
-TM = int(sys.argv[3])
+TM = 1
 # Recursive forecast in covariates
-RC = int(sys.argv[4])
+RC = 1
 # Sparse learning model standardization
-x_sl_stnd = int(sys.argv[5])
-y_sl_stnd = int(sys.argv[6])
+x_sl_stnd = int(sys.argv[1])
+y_sl_stnd = int(sys.argv[2])
 # Dense learning model standardization
-x_dl_stnd = int(sys.argv[7])
-y_dl_stnd = int(sys.argv[8])
+x_dl_stnd = int(sys.argv[3])
+y_dl_stnd = int(sys.argv[4])
 # Sparse learning model index
-SL = int(sys.argv[9])
+SL = int(sys.argv[5])
 # Dense learning model index
-DL = int(sys.argv[10])
+DL = int(sys.argv[6])
 # Define identification experiment key
 key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, SL, DL)
 print(key)
 
 # MPI job variables
-i_job, N_jobs, comm = _get_node_info()
+#i_job, N_jobs, comm = _get_node_info()
+i_job  = 0
+N_jobs = 1
 print(i_job, N_jobs)
 
 # Load the index of US land in the NOAA operational forecast
@@ -76,7 +78,7 @@ for i_resource in i_resources_:
 M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
 
 # Load proposed data
-data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
+data_ = _load_data_in_chunks([2023], path_to_pds)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -140,94 +142,84 @@ xis_     = [0, 1, 4, 5, 6, 12] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'ma
 thetas_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, SL, DL)
 
 # Initialize parameters error metric variables
-E_dl_theta_ = np.zeros((N_thetas, Y_dl_tr_.shape[1], 3))
-B_dl_theta_ = np.zeros((N_thetas, 1))
-P_dl_theta_ = np.zeros((N_thetas, Y_dl_tr_.shape[1]))
+S_dl_theta_ = np.zeros((N_thetas, 4))
 
 # Parallelize over possible parameters combinations
 for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     print(i_theta, N_thetas, thetas_[i_theta])
 
-    # Initialize cross-validation error metric variables
-    E_dl_val_ = np.zeros((N_kfolds, Y_dl_tr_.shape[1], 3))
-    B_dl_val_ = np.zeros((N_kfolds, 1))
-    P_dl_val_ = np.zeros((N_kfolds, Y_dl_tr_.shape[1]))
-
     # Initialize iteration counter and validation score matrices
-    i_theta_ = [i_theta, i_theta, i_theta]
-    i_fold   = 0
-    # # Loop over validation k-folds
-    # for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
-    #                               random_state = None,
-    #                               shuffle      = False).split(X_dl_tr_):
-    #
-    #     # Split spare learning validation partition in training and testing set
-    #     X_sl_val_tr_, X_sl_val_ts_ = X_sl_tr_[idx_tr_, ...], X_sl_tr_[idx_ts_, ...]
-    #     Y_sl_val_tr_, Y_sl_val_ts_ = Y_sl_tr_[idx_tr_, ...], Y_sl_tr_[idx_ts_, ...]
-    #     #print(X_sl_val_tr_.shape, Y_sl_val_tr_.shape, X_sl_val_ts_.shape, Y_sl_val_ts_.shape)
-    #
-    #     # Generate spase learning training and testing dataset
-    #     X_sl_val_tr_, Y_sl_val_tr_ = _sparse_learning_dataset(X_sl_val_tr_, Y_sl_val_tr_)
-    #     X_sl_val_ts_, Y_sl_val_ts_ = _sparse_learning_dataset(X_sl_val_ts_, Y_sl_val_ts_)
-    #     #print(X_sl_val_tr_.shape, y_sl_val_tr_.shape, X_sl_val_ts_.shape, y_sl_val_ts_.shape)
-    #
-    #     t_init = time.time()
-    #
-    #     # Standardize spase learning dataset
-    #     X_sl_val_tr_stnd_, Y_sl_val_tr_stnd_, X_sl_val_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_val_tr_, Y_sl_val_tr_, X_sl_val_ts_,
-    #                                                                                                 x_sl_stnd, y_sl_stnd)
-    #     #print(X_sl_val_tr_stnd_.shape, Y_sl_val_tr_stnd_.shape, X_sl_val_ts_stnd_.shape, Y_sl_val_ts_.shape)
-    #
-    #     # Fit sparse learning model
-    #     W_hat_ = _fit_sparse_learning(X_sl_val_tr_stnd_, X_sl_val_ts_stnd_, Y_sl_val_tr_stnd_, Y_sl_val_ts_, g_sl_,
-    #                                   thetas_, i_theta_, SL, y_sl_stnd)
-    #     # Split dense learning validation partition in training and testing set
-    #     X_dl_val_tr_, X_dl_val_ts_ = X_dl_tr_[idx_tr_, :], X_dl_tr_[idx_ts_, :]
-    #     Y_dl_val_tr_, Y_dl_val_ts_ = Y_dl_tr_[idx_tr_, :], Y_dl_tr_[idx_ts_, :]
-    #     #print(i_fold, X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape, Y_dl_val_ts_.shape)
-    #
-    #     # Standardize dense learning dataset
-    #     X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, X_dl_val_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_val_tr_, Y_dl_val_tr_, X_dl_val_ts_,
-    #                                                                                                 x_dl_stnd, y_dl_stnd)
-    #     #print(X_dl_val_tr_stnd_.shape, Y_dl_val_tr_stnd_.shape, Y_dl_val_tr_.shape)
-    #
-    #     # Fit Dense Learning Bayesian Model Chain
-    #     models_ = _fit_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL)
-    #
-    #     # Make probabilistic prediction
-    #     Y_dl_val_ts_hat_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_ = _prob_predict(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_,
-    #                                                                           thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 1000)
-    #
-    #     t_end += (time.time() - t_init)/N_kfolds
-    #
-    #     # Evaluate dense learning deterministic error metric
-    #     E_dl_                  = _det_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_)
-    #     E_dl_val_[i_fold, ...] = np.mean(E_dl_, axis = -1)
-    #     # Evaluate dense learning Bayesian metric
-    #     B_dl_                  = _mv_LPP_score(Y_dl_val_ts_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_)
-    #     B_dl_val_[i_fold, ...] = np.mean(B_dl_, axis = -1)
-    #     # Evaluate dense learning Probabilistic metric
-    #     P_dl_                  = _mv_CRPS_score(Y_dl_val_ts_, Y_dl_val_ts_hat_)
-    #     P_dl_val_[i_fold, ...] = np.mean(P_dl_, axis = -1)
-    #
-    #     # Go to the next iteration
-    #     i_fold += 1
-    #
-    # # Average cross-validation errors
-    # e_dl_val_ = np.mean(E_dl_val_, axis = 0)
-    # b_dl_val_ = np.mean(B_dl_val_, axis = 0)
-    # p_dl_val_ = np.mean(P_dl_val_, axis = 0)
-    # #print(e_dl_val_.shape, b_dl_val_.shape, p_dl_val_.shape)
-    #
-    # # Save parameter combination in .csv file
-    # _save_val_in_csv_file(e_dl_val_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'det/DLVal.csv')
-    # _save_val_in_csv_file(b_dl_val_[:, np.newaxis], [key, t_end, i_theta, thetas_[i_theta]], [''. join(str(e) for e in assets_)], path_to_rst, 'bay/DLVal.csv')
-    # _save_val_in_csv_file(p_dl_val_[:, np.newaxis], [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'prob/DLVal.csv')
-    #
-    # # Save averaged cross-validation errors for a given parameters set
-    # E_dl_theta_[i_theta, ...] = e_dl_val_
-    # B_dl_theta_[i_theta, ...] = b_dl_val_
-    # P_dl_theta_[i_theta, ...] = p_dl_val_
+    i_theta_  = [i_theta, i_theta, i_theta]
+    i_fold    = 0
+    S_dl_val_ = np.zeros((N_kfolds, 4))
+    t_init    = time.time()
+    # Loop over validation k-folds
+    for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
+                                  random_state = None,
+                                  shuffle      = False).split(X_dl_tr_):
+
+        # Split spare learning validation partition in training and testing set
+        X_sl_val_tr_, X_sl_val_ts_ = X_sl_tr_[idx_tr_, ...], X_sl_tr_[idx_ts_, ...]
+        Y_sl_val_tr_, Y_sl_val_ts_ = Y_sl_tr_[idx_tr_, ...], Y_sl_tr_[idx_ts_, ...]
+        #print(X_sl_val_tr_.shape, Y_sl_val_tr_.shape, X_sl_val_ts_.shape, Y_sl_val_ts_.shape)
+
+        # Generate spase learning training and testing dataset
+        X_sl_val_tr_, Y_sl_val_tr_ = _sparse_learning_dataset(X_sl_val_tr_, Y_sl_val_tr_)
+        X_sl_val_ts_, Y_sl_val_ts_ = _sparse_learning_dataset(X_sl_val_ts_, Y_sl_val_ts_)
+        #print(X_sl_val_tr_.shape, y_sl_val_tr_.shape, X_sl_val_ts_.shape, y_sl_val_ts_.shape)
+
+
+        # Standardize spase learning dataset
+        X_sl_val_tr_stnd_, Y_sl_val_tr_stnd_, X_sl_val_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_val_tr_, Y_sl_val_tr_, X_sl_val_ts_,
+                                                                                                    x_sl_stnd, y_sl_stnd)
+        #print(X_sl_val_tr_stnd_.shape, Y_sl_val_tr_stnd_.shape, X_sl_val_ts_stnd_.shape, Y_sl_val_ts_.shape)
+
+        # Fit sparse learning model
+        W_hat_ = _fit_sparse_learning(X_sl_val_tr_stnd_, X_sl_val_ts_stnd_, Y_sl_val_tr_stnd_, Y_sl_val_ts_, g_sl_,
+                                      thetas_, i_theta_, SL, y_sl_stnd)
+        # Split dense learning validation partition in training and testing set
+        X_dl_val_tr_, X_dl_val_ts_ = X_dl_tr_[idx_tr_, :], X_dl_tr_[idx_ts_, :]
+        Y_dl_val_tr_, Y_dl_val_ts_ = Y_dl_tr_[idx_tr_, :], Y_dl_tr_[idx_ts_, :]
+        #print(i_fold, X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape, Y_dl_val_ts_.shape)
+
+        # Standardize dense learning dataset
+        X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, X_dl_val_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_val_tr_, Y_dl_val_tr_, X_dl_val_ts_,
+                                                                                                    x_dl_stnd, y_dl_stnd)
+        #print(X_dl_val_tr_stnd_.shape, Y_dl_val_tr_stnd_.shape, Y_dl_val_tr_.shape)
+
+        # Fit Dense Learning Bayesian Model Chain
+        models_ = _fit_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL)
+
+        # Make probabilistic prediction
+        M_dl_val_ts_hat_, S2_dl_val_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
+
+        # Joint probabilistic prediction
+        Y_dl_val_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
+        
+        # Evaluate Continuous Ranked Probability Score
+        CRPS_dl_ = np.mean(_CRPS(Y_dl_val_ts_, Y_dl_val_ts_hat_), axis = -1)
+        # Evaluate energy score
+        ES_dl_ = _ES(Y_dl_val_ts_, Y_dl_val_ts_hat_)
+        # Evaluate multivariate variogram score
+        VS_dl_ = _VS(Y_dl_val_ts_, Y_dl_val_ts_hat_, p = .5)
+        # Evaluate ignorance score
+        IGS_dl_ = _IGS(Y_dl_val_ts_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_)
+
+        S_dl_val_[i_fold, 0] = np.mean(np.mean(CRPS_dl_, axis = -1))
+        S_dl_val_[i_fold, 1] = np.mean(np.mean(ES_dl_, axis = -1))
+        S_dl_val_[i_fold, 2] = np.mean(np.mean(VS_dl_, axis = -1))
+        S_dl_val_[i_fold, 3] = np.mean(IGS_dl_)
+
+        # Go to the next iteration
+        i_fold += 1
+
+    t_end = time.time() - t_init
+
+    # Save averaged cross-validation errors for a given parameters set
+    S_dl_theta_[i_theta, ...] = np.mean(S_dl_val_, axis = 0)
+
+    # Save parameter combination in .csv file
+    _save_val_in_csv_file(S_dl_theta_[i_theta, ...], [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'Val.csv')
 
     # Generate spase learning training and testing dataset in the correct format
     X_sl_tr_test_, Y_sl_tr_test_ = _sparse_learning_dataset(X_sl_tr_, Y_sl_tr_)
@@ -238,7 +230,7 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_tr_test_, Y_sl_tr_test_, X_sl_ts_test_,
                                                                                     x_sl_stnd, y_sl_stnd)
     #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape, Y_sl_ts_test_.shape)
-
+    
     t_init = time.time()
 
     # Fit sparse learning model
@@ -251,40 +243,25 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     # Fit dense dearning - Bayesian model chain
     models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_sl_tr_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL)
 
-    # Make probabilistic prediction
-    Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_ = _prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                                                              thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
+    # Make multitask probabilistic prediction
+    M_dl_ts_hat_, S2_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
+
+    # Make multitask joint probabilistic prediction
+    Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
 
     t_end = time.time() - t_init
 
-    # Make joint probabilistic prediction
-    Y_dl_ts_joint_hat_ = _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                                             thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
-
-    # Evaluate dense learning deterministic error metrics
-    E_dl_ = _det_metrics(Y_dl_ts_, M_dl_ts_hat_)
-    # Evaluate dense learning Bayesian metrics
-    B_dl_ = _mv_LPP_score(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_)
-    # Evaluate dense learning probabilistic metrics
-    P_dl_       = _mv_CRPS_score(Y_dl_ts_, Y_dl_ts_hat_)
-    P_dl_joint_ = _mv_CRPS_score(Y_dl_ts_, Y_dl_ts_joint_hat_)
-    # Save parameter combination in .csv file
-    _save_test_in_csv_file(E_dl_[:, 0, :], key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'det/', 'DLRMSETest.csv')
-    _save_test_in_csv_file(E_dl_[:, 1, :], key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'det/', 'DLMAETest.csv')
-    _save_test_in_csv_file(E_dl_[:, 2, :], key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'det/', 'DLMBETest.csv')
-    _save_test_in_csv_file(B_dl_[:, np.newaxis].T, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], [''. join(str(e) for e in assets_)], path_to_rst + 'bay/', 'DLNLPTest.csv')
-    _save_test_in_csv_file(P_dl_, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'prob/', 'DLCRPSTest.csv')
-    _save_test_in_csv_file(P_dl_joint_, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'prob/', 'DLJCRPSTest.csv')
-
-    # Average error metrics
-    e_dl_ = np.mean(E_dl_, axis = -1)
-    b_dl_ = np.mean(B_dl_, axis = -1)
-    p_dl_ = np.concatenate((np.mean(P_dl_, axis = -1)[:, np.newaxis], np.mean(P_dl_joint_, axis = -1)[:, np.newaxis]), axis = 1).T
-    print(e_dl_)
-    print(b_dl_)
-    print(p_dl_)
+    # Evaluate Continuous Ranked Probability Score
+    CRPS_dl_ = np.mean(np.mean(_CRPS(Y_dl_ts_, Y_dl_ts_hat_), axis = -1), axis = 1)
+    # Evaluate energy score
+    ES_dl_ = np.mean(_ES(Y_dl_ts_, Y_dl_ts_hat_), axis = 1)
+    # Evaluate multivariate variogram score
+    VS_dl_ = np.mean(_VS(Y_dl_ts_, Y_dl_ts_hat_, p = .5), axis = 1)
+    # Evaluate ignorance score
+    IGS_dl_ = _IGS(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_)
 
     # Save parameter combination in .csv file
-    _save_test_in_csv_file(e_dl_, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'det/', 'avgDLTest.csv')
-    _save_test_in_csv_file(b_dl_[np.newaxis, np.newaxis], key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], [''. join(str(e) for e in assets_)], path_to_rst + 'bay/', 'avgDLTest.csv')
-    _save_test_in_csv_file(p_dl_, key, t_end, i_theta_, [thetas_[i_theta] for i_theta in i_theta_], assets_, path_to_rst + 'prob/', 'avgDLTest.csv')
+    _save_test_in_csv_file(CRPS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'CRPSTest.csv')
+    _save_test_in_csv_file(ES_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'ESTest.csv')
+    _save_test_in_csv_file(VS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'VS05Test.csv')
+    _save_test_in_csv_file(IGS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'IGSTest.csv')

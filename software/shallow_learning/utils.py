@@ -791,59 +791,51 @@ def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_
 
     return models_
 
-# Make probabilistic prediction
-def _prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                  thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+# Predictive probabilistic distribution
+def _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd):
     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
-    Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    S2_dl_noise_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    #print(Y_dl_ts_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, S2_dl_noise_.shape)
     # Train an expert models for each hour
-    for hrzn in range(Y_dl_ts_hat_.shape[2]):
+    for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
         # Train an expert models for each hour
-        for tsk in range(Y_dl_ts_hat_.shape[1]):
+        for tsk in range(Y_dl_ts_stnd_hat_.shape[1]):
             # Define training and testing recursive dataset
             X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
             #print(key, thetas_[i_theta_[tsk]], hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-            Y_dl_ts_stnd_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn], S2_dl_noise_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
+            Y_dl_ts_stnd_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
         # Undo standardization from dense learning multi-task prediction
         if y_dl_stnd == 1:
             # To undo predictive covariance necessary covariance instead of variance
             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
             S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
-            S2_dl_noise_[..., hrzn]  = dl_scaler_[1][hrzn].var_*S2_dl_noise_[..., hrzn]
-        # Sample Predictive Posterior Distribution
-        Y_dl_ts_hat_[..., hrzn, :] = _sample_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] + S2_dl_noise_[..., hrzn], N_samples)
-        #Y_dl_ts_hat_[..., hrzn] = _sample_multivariate_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn])
-    return Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_
+    return M_dl_ts_hat_, S2_dl_ts_hat_
 
 # Make multitask probabilistic prediction
-def _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                            thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
-    #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
-    Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
-    Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-    S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    #print(Y_dl_ts_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, S2_dl_noise_.shape)
-    # Train an expert models for each hour
-    for hrzn in range(Y_dl_ts_hat_.shape[2]):
-        # Define training and testing recursive dataset
-        X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-        #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-        Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
-        # Undo standardization from dense learning multi-task prediction
-        if y_dl_stnd == 1:
-            # To undo predictive covariance necessary covariance instead of variance
-            Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-            M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-            S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
-        # Sample Predictive Posterior Distribution
-        Y_dl_ts_hat_[..., hrzn, :] = _sample_multivariate_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn], N_samples)
-    return Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_
+# def _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
+#                             thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+#     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
+#     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
+#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
+#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
+#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+#     #print(Y_dl_ts_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, S2_dl_noise_.shape)
+#     # Train an expert models for each hour
+#     for hrzn in range(Y_dl_ts_hat_.shape[2]):
+#         # Define training and testing recursive dataset
+#         X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
+#         #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+#         Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+#         # Undo standardization from dense learning multi-task prediction
+#         if y_dl_stnd == 1:
+#             # To undo predictive covariance necessary covariance instead of variance
+#             Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
+#             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
+#             S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
+#         # Sample Predictive Posterior Distribution
+#         Y_dl_ts_hat_[..., hrzn, :] = _sample_multivariate_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn], N_samples)
+#     return Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_
 
 # Multitask predictive probabilistic distribution
 def _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd):
@@ -867,13 +859,43 @@ def _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_ha
     return M_dl_ts_hat_, S2_dl_ts_hat_
 
 # Make joint probabilistic predictions
-def _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                        thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+# def _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
+#                         thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+#     # Variable initialization
+#     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
+#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
+#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
+#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+#     # Draw samples from predictive posterior
+#     for smpl in range(N_samples):
+#         # Train an expert models for each hour
+#         for hrzn in range(Y_dl_ts_hat_.shape[2]):
+#             # Train an expert models for each hour
+#             for tsk in range(Y_dl_ts_hat_.shape[1]):
+#                 # Define training and testing recursive dataset
+#                 X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
+#                 #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+#                 M_dl_ts_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
+#             # Undo standardization from dense learning multi-task prediction
+#             if y_dl_stnd == 1:
+#                 # To undo predictive covariance necessary covariance instead of variance
+#                 M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_[..., hrzn])
+#                 S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
+#             # Sample Predictive Posterior Distribution
+#             Y_dl_ts_hat_[..., hrzn, smpl] = _sample_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn])
+#             # Standardized predictors for recursive model
+#             if y_dl_stnd == 1:
+#                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
+#     return Y_dl_ts_hat_
+
+# Joint probabilistic predictions
+def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
+                           thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
     # Variable initialization
     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-    S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+    M_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1]))
+    S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1]))
     # Draw samples from predictive posterior
     for smpl in range(N_samples):
         # Train an expert models for each hour
@@ -883,14 +905,14 @@ def _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_
                 # Define training and testing recursive dataset
                 X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
                 #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-                M_dl_ts_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
+                M_dl_ts_hat_[..., tsk], S2_dl_ts_hat_[..., tsk] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
             # Undo standardization from dense learning multi-task prediction
             if y_dl_stnd == 1:
                 # To undo predictive covariance necessary covariance instead of variance
-                M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_[..., hrzn])
-                S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
+                M_dl_ts_hat_  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_)
+                S2_dl_ts_hat_ = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_
             # Sample Predictive Posterior Distribution
-            Y_dl_ts_hat_[..., hrzn, smpl] = _sample_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn])
+            Y_dl_ts_hat_[..., hrzn, smpl] = _sample_multivariate_normal(M_dl_ts_hat_, np.concatenate([np.diag(S2_dl_ts_hat_[i, :])[np.newaxis, ...] for i in range(S2_dl_ts_hat_.shape[0])], axis = 0))
             # Standardized predictors for recursive model
             if y_dl_stnd == 1:
                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
@@ -996,10 +1018,9 @@ __all__ = ['_get_node_info',
            '_fit_dense_learning',
            '_fit_sparse_learning',
            '_fit_multitask_dense_learning',
-           '_prob_predict',
-           '_multitask_prob_predict',
+           '_pred_prob_dist',
            '_multitask_pred_prob_dist',
-           '_joint_prob_predict',
+           '_joint_prob_prediction',
            '_multitask_joint_prediction',
            '_multisource_structure_dataset',
            '_CRPS',

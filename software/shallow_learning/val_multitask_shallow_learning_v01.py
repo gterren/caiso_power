@@ -147,13 +147,11 @@ S_dl_theta_ = np.zeros((N_thetas, 4))
 for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     print(i_theta, N_thetas)
 
-    # Initialize cross-validation error metric variables
-    S_dl_val_ = np.zeros((N_kfolds, 4))
-
     # Initialize iteration counter and validation score matrices
-    i_theta_ = [i_theta, i_theta, i_theta]
-    i_fold   = 0
-    t_init   = time.time()
+    i_theta_  = [i_theta, i_theta, i_theta]
+    i_fold    = 0
+    S_dl_val_ = np.zeros((N_kfolds, 4))
+    t_init    = time.time()
     # Loop over validation k-folds
     for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                                   random_state = None,
@@ -213,7 +211,8 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
         # Go to the next iteration
         i_fold += 1
 
-    t_end = (time.time() - t_init)
+    t_end = time.time() - t_init
+    
     # Save averaged cross-validation errors for a given parameters set
     S_dl_theta_[i_theta, ...] = np.mean(S_dl_val_, axis = 0)
 
