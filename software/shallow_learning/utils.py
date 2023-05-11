@@ -378,19 +378,19 @@ def _MAE(y_, y_hat_):
 def _MBE(y_, y_hat_):
     return np.mean((y_ - y_hat_), axis = 0)
 
-# Negative Log Predictive Probability
-def _NLPP(y_, y_hat_, s_2_hat_):
-    return - np.sum([norm(y_hat_[i], np.sqrt(s_2_hat_[i])).logpdf(y_[i]) for i in range(y_hat_.shape[-1])])
-
-# Compute probabilistic scores
-def _prob_metrics(Y_, Y_hat_, S_hat_):
-    scores_ = []
-    # Samples / Tasks / Forecasting horizons
-    for tsk in range(Y_hat_.shape[1]):
-        NLPP_ = np.array([_NLPP(Y_[..., tsk, hrzn], Y_hat_[..., tsk, hrzn], S_hat_[..., tsk, hrzn]) for hrzn in range(Y_.shape[-1])])[np.newaxis, :]
-        CRPS_ = np.array([_CRPS(Y_[..., tsk, hrzn], Y_hat_[..., tsk, hrzn], S_hat_[..., tsk, hrzn]) for hrzn in range(Y_.shape[-1])])[np.newaxis, :]
-        scores_.append(np.concatenate((NLPP_, CRPS_), axis = 0)[:, np.newaxis, :])
-    return np.swapaxes(np.concatenate(scores_, axis = 1), 0, 1)
+# # Negative Log Predictive Probability
+# def _NLPP(y_, y_hat_, s_2_hat_):
+#     return - np.sum([norm(y_hat_[i], np.sqrt(s_2_hat_[i])).logpdf(y_[i]) for i in range(y_hat_.shape[-1])])
+#
+# # Compute probabilistic scores
+# def _prob_metrics(Y_, Y_hat_, S_hat_):
+#     scores_ = []
+#     # Samples / Tasks / Forecasting horizons
+#     for tsk in range(Y_hat_.shape[1]):
+#         NLPP_ = np.array([_NLPP(Y_[..., tsk, hrzn], Y_hat_[..., tsk, hrzn], S_hat_[..., tsk, hrzn]) for hrzn in range(Y_.shape[-1])])[np.newaxis, :]
+#         CRPS_ = np.array([_CRPS(Y_[..., tsk, hrzn], Y_hat_[..., tsk, hrzn], S_hat_[..., tsk, hrzn]) for hrzn in range(Y_.shape[-1])])[np.newaxis, :]
+#         scores_.append(np.concatenate((NLPP_, CRPS_), axis = 0)[:, np.newaxis, :])
+#     return np.swapaxes(np.concatenate(scores_, axis = 1), 0, 1)
 
 # Compute deterministic scores
 def _det_metrics(Y_, Y_hat_):
@@ -498,7 +498,7 @@ def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, sl, 
     return list(product(*thetas_)), len(list(product(*thetas_)))
 
 # Parallelize experiment combinations
-def split_experiments_into_jobs_per_batches(exps_, i_batch, N_batches, i_job, N_jobs):
+def _split_experiments_into_jobs_per_batches(exps_, i_batch, N_batches, i_job, N_jobs):
     exps_batch_ = np.linspace(0, len(exps_) - 1, len(exps_), dtype = int)[i_batch::N_batches]
     return [exps_batch_[i_job::N_jobs] for i_job in range(N_jobs)]
 
@@ -993,19 +993,17 @@ __all__ = ['_get_node_info',
            '_dense_learning_stand',
            '_spare_learning_stand',
            '_spare_learning_stand',
-           '_prob_metrics',
            '_det_metrics',
            '_sparse_det_metrics',
            '_dense_learning_recursive_dataset',
            '_get_cv_param',
-           'split_experiments_into_jobs_per_batches',
+           '_split_experiments_into_jobs_per_batches',
            '_save_val_in_csv_file',
            '_save_test_in_csv_file',
            '_save_baselines_in_csv_file',
            '_save_pred_in_pkl_file',
            '_RMSE',
            '_MAE',
-           '_NLPP',
            '_BayesianLinearRegression',
            '_GaussianProcess',
            '_MultiTaskGaussianProcess',
