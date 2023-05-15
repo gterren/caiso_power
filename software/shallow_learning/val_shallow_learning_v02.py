@@ -32,7 +32,7 @@ i_resources_ = [1]
 # Resources: [{MWD, PGE, SCE, SDGE, VEA}, {NP, SP, ZP}, {NP, SP}]
 i_assets_ = [[1, 2, 3], [0, 1, 2], [0, 1]]
 # Cross-validation configuration
-N_kfolds = 3
+N_kfolds = 5
 # Spatial masks {All, US Land, All CAISO Resources density, Resource density}
 i_mask = 3
 tau    = 0.
@@ -60,9 +60,7 @@ key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl
 print(key)
 
 # MPI job variables
-#i_job, N_jobs, comm = _get_node_info()
-i_job  = 0
-N_jobs = 1
+i_job, N_jobs, comm = _get_node_info()
 print(i_job, N_jobs)
 
 # Load the index of US land in the NOAA operational forecast
@@ -78,7 +76,7 @@ for i_resource in i_resources_:
 M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
 
 # Load proposed data
-data_ = _load_data_in_chunks([2023], path_to_pds)
+data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -136,7 +134,7 @@ omegas_  = [0.01, 0.25, 0.5, 0.75]
 gammas_  = [1., 10., 100., 500., 1000.]
 etas_    = [0.25, 0.5, 0.75, 1.]
 lambdas_ = [0.1, 1., 5., 10., 50., 100., 1000., 10000.]
-xis_     = [0, 1, 4, 5, 6, 12] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
+xis_     = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
 
 # Get combination of possible parameters
 thetas_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, SL, DL)

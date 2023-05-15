@@ -688,8 +688,7 @@ def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, t
             # Linear Relevance Vector Machine Regression with Hyperprior
             if DL == 1: _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, threshold_lambda = thetas_[i_theta_[tsk]][-1])[0]
             # Gaussian Process for Regression with Hyperprior
-            if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, xi = thetas_[i_theta_[tsk]][-1])[0]
-
+            if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, hrzn, xi = thetas_[i_theta_[tsk]][-1])[0]
             # Make prediction for recursive model
             Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL, X_dl_tr_rc_, DL)
 

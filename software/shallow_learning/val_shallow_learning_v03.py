@@ -1,4 +1,4 @@
-import sys, time
+import sys, time, math
 
 import numpy as np
 import pandas as pd
@@ -21,8 +21,19 @@ path_to_img = r"/home/gterren/caiso_power/images/"
 # DL = 0: X = {0, 1}, Y = {0}
 
 # Parallelize experiment combinations
-def _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
+def _split_parameters_set_into_jobs(i_job, N_jobs, N_thetas):
     return [np.linspace(0, N_thetas - 1, N_thetas, dtype = int)[i_job::N_jobs] for i_job in range(N_jobs)][i_job]
+
+
+# Parallelize experiment combinations in batches
+def _split_parameters_set_into_jobs_per_batch(i_job, N_jobs, i_batch, N_batches, N_thetas):
+    N_thetas_per_batch = math.ceil(N_thetas/N_batches)
+    N_thetas_per_job   = math.ceil(N_thetas_per_batch/N_jobs)
+    # Get thetas indexes in Batch
+    idx_thetas_in_batch_ = [np.arange(N_thetas, dtype = int)[i*N_thetas_per_batch:(i + 1)*N_thetas_per_batch] for i in range(N_batches)][i_batch]
+    # Get thetas indexes in Job
+    idx_thetas_in_job_   = [idx_thetas_in_batch_[i*N_thetas_per_job:(i + 1)*N_thetas_per_job] for i in range(N_jobs)][i_job]
+    return idx_thetas_in_job_
 
 # Get Grid Dimensions
 N = 104
@@ -32,7 +43,7 @@ i_resources_ = [1]
 # Resources: [{MWD, PGE, SCE, SDGE, VEA}, {NP, SP, ZP}, {NP, SP}]
 i_assets_ = [[1, 2, 3], [0, 1, 2], [0, 1]]
 # Cross-validation configuration
-N_kfolds = 3
+N_kfolds = 5
 # Spatial masks {All, US Land, All CAISO Resources density, Resource density}
 i_mask = 3
 tau    = 0.
@@ -55,14 +66,17 @@ y_dl_stnd = int(sys.argv[4])
 SL = int(sys.argv[5])
 # Dense learning model index
 DL = int(sys.argv[6])
+# Split Cross-validation in Batches
+i_batch   = int(sys.argv[7])
+N_batches = 1
+
 # Define identification experiment key
 key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, SL, DL)
 print(key)
 
 # MPI job variables
-#i_job, N_jobs, comm = _get_node_info()
-i_job  = 0
-N_jobs = 1
+i_job, N_jobs, comm = _get_node_info()
+print(i_job, N_jobs)
 
 # Load the index of US land in the NOAA operational forecast
 US_land_ = pd.read_pickle(path_to_aux + r"USland_0.125_(-125,-112)_(32,43).pkl")
@@ -77,7 +91,7 @@ for i_resource in i_resources_:
 M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
 
 # Load proposed data
-data_ = _load_data_in_chunks([2023], path_to_pds)
+data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -141,16 +155,16 @@ xis_     = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'mat
 thetas_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, SL, DL)
 
 # Initialize parameters error metric variables
-S_dl_theta_ = np.zeros((N_thetas, 4))
+S_dl_theta_ = np.zeros((N_thetas, 7))
 
 # Parallelize over possible parameters combinations
-for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
-    print(i_theta, N_thetas)
+for i_theta in _split_parameters_set_into_jobs_per_batch(i_job, N_jobs, i_batch, N_batches, N_thetas):
+    print(i_theta, N_thetas, thetas_[i_theta])
 
     # Initialize iteration counter and validation score matrices
     i_theta_  = [i_theta, i_theta, i_theta]
     i_fold    = 0
-    S_dl_val_ = np.zeros((N_kfolds, 4))
+    S_dl_val_ = np.zeros((N_kfolds, 7))
     t_init    = time.time()
     # Loop over validation k-folds
     for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
@@ -167,14 +181,15 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
         X_sl_val_ts_, Y_sl_val_ts_ = _sparse_learning_dataset(X_sl_val_ts_, Y_sl_val_ts_)
         #print(X_sl_val_tr_.shape, y_sl_val_tr_.shape, X_sl_val_ts_.shape, y_sl_val_ts_.shape)
 
+
         # Standardize spase learning dataset
         X_sl_val_tr_stnd_, Y_sl_val_tr_stnd_, X_sl_val_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_val_tr_, Y_sl_val_tr_, X_sl_val_ts_,
                                                                                                     x_sl_stnd, y_sl_stnd)
+        #print(X_sl_val_tr_stnd_.shape, Y_sl_val_tr_stnd_.shape, X_sl_val_ts_stnd_.shape, Y_sl_val_ts_.shape)
 
         # Fit sparse learning model
         W_hat_ = _fit_sparse_learning(X_sl_val_tr_stnd_, X_sl_val_ts_stnd_, Y_sl_val_tr_stnd_, Y_sl_val_ts_, g_sl_,
                                       thetas_, i_theta_, SL, y_sl_stnd)
-
         # Split dense learning validation partition in training and testing set
         X_dl_val_tr_, X_dl_val_ts_ = X_dl_tr_[idx_tr_, :], X_dl_tr_[idx_ts_, :]
         Y_dl_val_tr_, Y_dl_val_ts_ = Y_dl_tr_[idx_tr_, :], Y_dl_tr_[idx_ts_, :]
@@ -183,16 +198,16 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
         # Standardize dense learning dataset
         X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, X_dl_val_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_val_tr_, Y_dl_val_tr_, X_dl_val_ts_,
                                                                                                     x_dl_stnd, y_dl_stnd)
-        #print(X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape)
+        #print(X_dl_val_tr_stnd_.shape, Y_dl_val_tr_stnd_.shape, Y_dl_val_tr_.shape)
 
-        # Fit multitask dense learning - Bayesian model chain
-        models_ = _fit_multitask_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL)
+        # Fit Dense Learning Bayesian Model Chain
+        models_ = _fit_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL)
 
-        # Make multitask probabilistic prediction
-        M_dl_val_ts_hat_, S2_dl_val_ts_hat_ = _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
+        # Make probabilistic prediction
+        M_dl_val_ts_hat_, S2_dl_val_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
 
-        # Make multitask joint probabilistic prediction
-        Y_dl_val_ts_hat_ = _multitask_joint_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
+        # Joint probabilistic prediction
+        Y_dl_val_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
 
         # Evaluate Continuous Ranked Probability Score
         CRPS_dl_ = np.mean(_CRPS(Y_dl_val_ts_, Y_dl_val_ts_hat_), axis = -1)
@@ -203,30 +218,38 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
         # Evaluate ignorance score
         IGS_dl_ = _IGS(Y_dl_val_ts_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_)
 
+        # Evaluate dense learning validation deterministic error metrics
+        E_dl_det_  = _det_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_)
+        e_dl_det_ = np.mean(np.mean(E_dl_det_, axis = -1), axis = 0)
+
         S_dl_val_[i_fold, 0] = np.mean(np.mean(CRPS_dl_, axis = -1))
         S_dl_val_[i_fold, 1] = np.mean(np.mean(ES_dl_, axis = -1))
         S_dl_val_[i_fold, 2] = np.mean(np.mean(VS_dl_, axis = -1))
         S_dl_val_[i_fold, 3] = np.mean(IGS_dl_)
+        S_dl_val_[i_fold, 4] = e_dl_det_[0]
+        S_dl_val_[i_fold, 5] = e_dl_det_[1]
+        S_dl_val_[i_fold, 6] = e_dl_det_[2]
 
         # Go to the next iteration
         i_fold += 1
 
     t_end = time.time() - t_init
-    
+
     # Save averaged cross-validation errors for a given parameters set
     S_dl_theta_[i_theta, ...] = np.mean(S_dl_val_, axis = 0)
 
     # Save parameter combination in .csv file
-    _save_val_in_csv_file(S_dl_theta_[i_theta, ...], [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'MTVal.csv')
+    _save_val_in_csv_file(S_dl_theta_[i_theta, ...], [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'Val.csv')
 
     # Generate spase learning training and testing dataset in the correct format
     X_sl_tr_test_, Y_sl_tr_test_ = _sparse_learning_dataset(X_sl_tr_, Y_sl_tr_)
     X_sl_ts_test_, Y_sl_ts_test_ = _sparse_learning_dataset(X_sl_ts_, Y_sl_ts_)
-    print(X_sl_tr_test_.shape, Y_sl_tr_test_.shape, X_sl_ts_test_.shape, Y_sl_ts_test_.shape)
+    #print(X_sl_tr_test_.shape, Y_sl_tr_test_.shape, X_sl_ts_test_.shape, Y_sl_ts_test_.shape)
 
     # Standardize spase learning dataset
-    X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_tr_test_, Y_sl_tr_test_, X_sl_ts_test_, x_sl_stnd, y_sl_stnd)
-    print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape, Y_sl_ts_test_.shape)
+    X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _spare_learning_stand(X_sl_tr_test_, Y_sl_tr_test_, X_sl_ts_test_,
+                                                                                    x_sl_stnd, y_sl_stnd)
+    #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape, Y_sl_ts_test_.shape)
 
     t_init = time.time()
 
@@ -237,14 +260,14 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_dl_stnd, y_dl_stnd)
     #print(X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape)
 
-    # Fit Dense Learning Bayesian Model Chain
-    models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_sl_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL)
+    # Fit dense dearning - Bayesian model chain
+    models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_sl_tr_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL)
 
     # Make multitask probabilistic prediction
-    M_dl_ts_hat_, S2_dl_ts_hat_ = _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
+    M_dl_ts_hat_, S2_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd)
 
     # Make multitask joint probabilistic prediction
-    Y_dl_ts_hat_ = _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
+    Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
 
     t_end = time.time() - t_init
 
@@ -256,9 +279,16 @@ for i_theta in _split_parameters_sets_into_jobs(i_job, N_jobs, N_thetas):
     VS_dl_ = np.mean(_VS(Y_dl_ts_, Y_dl_ts_hat_, p = .5), axis = 1)
     # Evaluate ignorance score
     IGS_dl_ = _IGS(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_)
+    # Evaluate dense learning validation deterministic error metrics
+    E_dl_ = np.mean(np.mean(_det_metrics(Y_dl_ts_, M_dl_ts_hat_), axis = -1), axis = 0)
+    S_dl_ = np.array([CRPS_dl_.mean(), ES_dl_.mean(), VS_dl_.mean(), IGS_dl_.mean(), E_dl_[0], E_dl_[1], E_dl_[2]])
+    # Save parameter combination in .csv file
+    _save_val_in_csv_file(S_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'Test.csv')
 
     # Save parameter combination in .csv file
-    _save_test_in_csv_file(CRPS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'MTCRPSTest.csv')
-    _save_test_in_csv_file(ES_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'MTESTest.csv')
-    _save_test_in_csv_file(VS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'MTVS05Test.csv')
-    _save_test_in_csv_file(IGS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'MTIGSTest.csv')
+    _save_test_in_csv_file(CRPS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'CRPSTest.csv')
+    _save_test_in_csv_file(ES_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'ESTest.csv')
+    _save_test_in_csv_file(VS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'VS05Test.csv')
+    _save_test_in_csv_file(IGS_dl_, [key, t_end, i_theta, thetas_[i_theta]], assets_, path_to_rst, 'IGSTest.csv')
+
+
