@@ -1,6 +1,6 @@
 # caiso_power
 
-anaconda numpy pandas scipy scikit-learn
+conda install -c anaconda numpy pandas scipy scikit-learn 
 
 conda install scikit-learn-intelex
 
