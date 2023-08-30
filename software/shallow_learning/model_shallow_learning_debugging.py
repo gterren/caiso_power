@@ -30,7 +30,7 @@ path_to_img = r"/home/gterren/caiso_power/images/"
 N = 104
 M = 88
 
-dl_methods_ = ['BLR', 'RVM', 'GP', 'MTGP']
+dl_methods_ = ['GP', 'RVM', 'KGP', 'MTKGP']
 sl_methods_ = ['lasso', 'OMP', 'elastic_net', 'group_lasso']
 
 # Assets in resources: {load:5, solar:3, wind:2}
@@ -58,9 +58,6 @@ sl_method = sl_methods_[SL]
 dl_method = dl_methods_[DL]
 print(sl_method, dl_method)
 #MTGP = 'Bonilla'
-# Define identification experiment key
-i_batch   = int(sys.argv[3])
-N_batches = 8
 # Sparse learning model standardization
 x_sl_stnd, y_sl_stnd = [[1, 0], [1, 0], [1, 1], [1, 0]][SL]
 # Dense learning model standardization
@@ -74,11 +71,10 @@ etas_    = [0.25, 0.5, 0.75, 1.]
 lambdas_ = [1., 10., 100., 1000.]
 xis_     = [0, 1, 4, 5, 6] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
 # Get combination of possible parameters
-thetas_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, SL, DL)
-exps_             = _experiments([[0, 1], [0, 1], [0, 1], [0, 1], thetas_])
-#exps_             = _experiments([[0, 1], [0, 1], thetas_])
-i_exps_           = _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs)
-print(i_exps_, len(i_exps_))
+# theta_0_ = [(), (), (), ()][DL]
+# theta_1_ = [(), (), (), ()][DL]
+# theta_2_ = [(), (), (), ()][DL]
+# thetas_  = [theta_0_, theta_1_, theta_2_]
 
 # Load the index of US land in the NOAA operational forecast
 US_land_ = pd.read_pickle(path_to_aux + r"USland_0.125_(-125,-112)_(32,43).pkl")
@@ -89,10 +85,11 @@ D_den_, S_den_, W_den_ = pd.read_pickle(path_to_aux + r"density_grid_0.125_(-125
 F_ = np.zeros(US_land_.shape)
 for i_resource in i_resources_:
     F_ += [D_den_, S_den_, W_den_][i_resource]
-M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, D_den_ + S_den_]
+#M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, [D_den_, S_den_, W_den_][i_resource]]
+M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
 
 # Load proposed data
-data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
+data_ = _load_data_in_chunks([2023], path_to_pds)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -113,12 +110,11 @@ del X_ac_, X_sl_, Y_sl_
 
 # Generate dense learning dataset
 X_dl_, Y_dl_, g_dl_ = _dense_learning_dataset(X_fc_, Y_ac_, Z_, g_dl_, N_lags, AR, CS, TM)
-#print(X_dl_.shape, Y_dl_.shape, g_dl_.shape)
 
 # Split data in training and testing
 X_dl_tr_, X_dl_ts_ = _training_and_testing_dataset(X_dl_)
 Y_dl_tr_, Y_dl_ts_ = _training_and_testing_dataset(Y_dl_)
-#print(X_dl_tr_.shape, Y_dl_tr_.shape, X_dl_ts_.shape, Y_dl_ts_.shape)
+meta_dl_ts_        = X_dl_ts_[:,  -7:, :]
 del X_fc_, X_dl_, Y_dl_, Z_
 
 # Naive and CAISO forecasts as baselines
@@ -148,54 +144,48 @@ X_sl_tr_, Y_sl_tr_ = _sparse_learning_dataset_format(X_sl_tr_, Y_sl_tr_)
 X_sl_ts_, Y_sl_ts_ = _sparse_learning_dataset_format(X_sl_ts_, Y_sl_ts_)
 #print(X_sl_tr_test_.shape, Y_sl_tr_test_.shape, X_sl_ts_test_.shape, Y_sl_ts_test_.shape)
 
-# Find optimal parameters
-#R_sl_ts_ = []
-R_dl_ts_ = []
-for i_exp in i_exps_:
-    # Initialize constants
-    x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, theta_ = exps_[i_exp]
-    #x_sl_stnd, y_sl_stnd, theta_ = exps_[i_exp]
+t_init  = time.time()
+print(i_job, i_exp, x_sl_stnd, y_sl_stnd, thetas_)
 
-    thetas_ = [theta_, theta_, theta_]
-    t_init  = time.time()
-    print(i_job, i_exp, x_sl_stnd, y_sl_stnd, thetas_)
+# Standardize sparse learning dataset
+X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _sparse_learning_stand(X_sl_tr_, Y_sl_tr_, X_sl_ts_, x_sl_stnd, y_sl_stnd)
+#print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
 
-    # Standardize sparse learning dataset
-    X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _sparse_learning_stand(X_sl_tr_, Y_sl_tr_, X_sl_ts_, x_sl_stnd, y_sl_stnd)
-    #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
+# Fit sparse learning model
+W_hat_, Y_sl_ts_hat_ = _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd)
+#print(W_hat_.shape, Y_sl_ts_hat_.shape)
 
-    # Fit sparse learning model
-    W_hat_, Y_sl_ts_hat_ = _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd)
-    #print(W_hat_.shape, Y_sl_ts_hat_.shape)
+# Standardize dense learning dataset
+t_init = time.time()
 
-    #meta_    = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, theta_, time.time() - t_init], index = ['experiment', 'sparse_method', 'x_std', 'y_std', 'parameters', 'time']).T
-    #E_sl_ts_ = _sparse_det_metrics(Y_sl_ts_, Y_sl_ts_hat_)
-    #R_sl_ts_.append(pd.concat([meta_, _flatten_DataFrame(E_sl_ts_)], axis = 1))
+X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_dl_stnd, y_dl_stnd)
+#print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
 
-    # Standardize dense learning dataset
-    t_init = time.time()
+# Fit sense learning - Bayesian model chain
+models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL)
 
-    X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_dl_stnd, y_dl_stnd)
-    #print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
+# Independent prediction with conficence intervals
+M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+#print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
+# Joint probabilistic predictions
+Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 250)
+#print(Y_dl_ts_.shape, Y_dl_ts_hat_.shape)
 
-    # Fit sense learning - Bayesian model chain
-    models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL)
+# Save model and outputs
+_model                         = {}
+_model['weights']              = W_hat_
+_model['dense_leraning']       = models_
+_model['testing_targets']      = Y_dl_ts_
+_model['testing_targets_meta'] = meta_dl_ts_
+_model['predictive_distribution']                       = {}
+_model['predictive_distribution']['mean']               = M_dl_ts_hat_
+_model['predictive_distribution']['Covarice']           = C_dl_ts_hat_
+_model['predictive_distribution']['standard_deviation'] = S2_dl_ts_hat_
+_model['predictive_distribution']['joint_samples']      = Y_dl_ts_hat_
 
-    # Independent prediction with conficence intervals
-    M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
-    #print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
-    # Joint probabilistic predictions
-    Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 250)
-    #print(Y_dl_ts_.shape, Y_dl_ts_hat_.shape)
+_save_dict(_model, path_to_rst, file_name = 'model_{}.pkl'.format(dl_method))
 
-    meta_     = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, time.time() - t_init], index = ['experiment', 'sparse_method', 'x_std', 'y_std', 'dense_method', 'x_std', 'y_std', 'parameters', 'time']).T
-    P_dl_ts_  = _prob_metrics(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
-    E_dl_ts_  = _baseline_det_metrics(Y_dl_ts_, M_dl_ts_hat_)
-    MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, Y_dl_ts_hat_)
-    R_dl_ts_.append(pd.concat([meta_, _flatten_DataFrame(P_dl_ts_), _flatten_DataFrame(E_dl_ts_), _flatten_DataFrame(MV_dl_ts_)], axis = 1))
 
-#_combine_parallel_results(comm, pd.concat(R_sl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test_sparse_learning.csv')
-_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test_{}_v1.csv'.format(dl_method))
 
 
 # # Make probabilistic prediction

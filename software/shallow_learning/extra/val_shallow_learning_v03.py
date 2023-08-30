@@ -68,7 +68,7 @@ SL = int(sys.argv[5])
 DL = int(sys.argv[6])
 # Split Cross-validation in Batches
 i_batch   = int(sys.argv[7])
-N_batches = 1
+N_batches = 6
 
 # Define identification experiment key
 key = '{}{}_{}{}{}{}_{}{}_{}{}_{}{}'.format(N_lags, i_mask, AR, CS, TM, RC, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, SL, DL)
