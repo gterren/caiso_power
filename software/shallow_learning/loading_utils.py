@@ -1,12 +1,27 @@
-import pickle, glob, os, blosc, csv
+import pickle, glob, blosc, csv
 
 import numpy as np
+import pandas as pd
 
-from time import sleep
-from datetime import datetime, date, timedelta
 from itertools import product, chain
 
 from sklearn.preprocessing import StandardScaler
+
+# Wind speed extrapolation at multiple altitudes (10, 60, 80, 100, and 120 m)
+def _extrapolate_wind(M_10_, M_80_):
+    # Compute power law
+    def __power_law(m_1_, h_1, h_2, alpha_):
+        return m_1_ * (h_2/h_1)**alpha_
+    # Compute power law exponent
+    alpha_ = (np.log(M_10_) - np.log(M_80_))/(np.log(80.) - np.log(10.))
+    # Compute wind speed applying power law
+    M_60_  = __power_law(M_10_, 60., 10., alpha_)
+    M_100_ = __power_law(M_80_, 100., 80., alpha_)
+    M_120_ = __power_law(M_80_, 120., 80., alpha_)
+    return M_60_, M_100_, M_120_
+
+def _periodic(x_, period):
+    return np.cos(2.*np.pi*x_/period)
 
 # Load data in a compressed file
 def _load_data_in_chunks(years_, path):
@@ -30,6 +45,10 @@ def _load_data_in_chunks(years_, path):
                 try:
                     file_name = path + "{}_{}-{}.dat".format(year, i, j)
                     data_p_   = __load_data_in_compressed_file(file_name)
+
+                    data_p_[2][:, 7, :], data_p_[2][:, 9, :], data_p_[2][:, 10, :]  = _extrapolate_wind(data_p_[2][:, 6, :], data_p_[2][:, 8, :])
+                    data_p_[3][:, 8, :], data_p_[3][:, 10, :], data_p_[3][:, 11, :] = _extrapolate_wind(data_p_[3][:, 7, :], data_p_[3][:, 9, :])
+
                     # Append together all chucks
                     V_.append(data_p_[0])
                     W_.append(data_p_[1])
@@ -41,12 +60,22 @@ def _load_data_in_chunks(years_, path):
                     continue
             # Concatenate data if files existed
             if len(X_) > 0:
-                V_ = np.concatenate(V_, axis = 0)
-                W_ = np.concatenate(W_, axis = 0)
-                X_ = np.concatenate(X_, axis = 0)
-                Y_ = np.concatenate(Y_, axis = 0)
-                Z_ = np.concatenate(Z_, axis = 0)
-                data_.append([V_, W_, X_, Y_, Z_])
+                V_  = np.concatenate(V_, axis = 0)
+                W_  = np.concatenate(W_, axis = 0)
+                X_  = np.concatenate(X_, axis = 0)
+                Y_  = np.concatenate(Y_, axis = 0)
+                ZZ_ = np.concatenate(Z_, axis = 0)
+                Z_  = ZZ_.astype(float).copy()
+
+                Z_[:, 1] = _periodic(Z_[:, 1], period = 12)
+                Z_[:, 2] = _periodic(Z_[:, 2], period = 31)
+                Z_[:, 3] = _periodic(Z_[:, 3], period = 365)
+                Z_[:, 4] = _periodic(Z_[:, 4], period = 24)
+                Z_[:, 5] = _periodic(Z_[:, 5], period = 7)
+                Z_[Z_[:, 6] == 0, 6] = -1.
+                Z_[Z_[:, 7] == 0, 7] = -1.
+                Z_[Z_[:, 8] == 0, 8] = -1.
+                data_.append([V_, W_, X_, Y_, Z_, ZZ_])
     return data_
 
 # v = {MWD (ac), PGE (ac), SCE (ac), SDGE (ac), VEA (ac), NP15 solar (ac), SP15 solar (ac), ZP26 solar (ac), NP15 wind (ac), SP15 wind (ac)}
@@ -58,79 +87,12 @@ def _load_data_in_chunks(years_, path):
 # z = {year, month, day, yday, hour, weekday, weekend, isdst, holiday}
 # DSWRF = Diffuse Radiation
 # Is only water pumping... (?)
-# def _structure_dataset(data_, i_resource, F_idx_, tau, v_idx_ = [[0, 1, 2, 3, 4], [5, 6, 7], [8, 9]],
-#                                                        w_idx_ = [[0, 1, 2, 3, 4], [5, 6, 7], [8, 9]],
-#                                                        x_idx_ = [[0, 1, 3, 4, 5, 11, 12, 13, 14], [1, 2, 14], [6, 7, 8, 9, 10]],
-#                                                        y_idx_ = [[0, 1, 2, 4, 5, 6, 12, 13, 14, 15], [2, 3, 15], [7, 8, 9, 10, 11]],
-#                                                        z_idx_ = [[0, 3, 4, 5, 6, 7, 8], [0, 3, 4, 7], [0, 3, 4, 7]]):
-#     v_idx_ = v_idx_[i_resource]
-#     w_idx_ = w_idx_[i_resource]
-#     x_idx_ = x_idx_[i_resource]
-#     y_idx_ = y_idx_[i_resource]
-#     z_idx_ = z_idx_[i_resource]
-#     #F_idx_ = F_idx_[i_resource]
-#     # Concatenate all chucks of data in matrix form
-#     V_, W_, X_, Y_, Z_ = [], [], [], [], []
-#     for i in range(len(data_)):
-#         V_.append(data_[i][0][:, v_idx_])
-#         W_.append(data_[i][1][:, w_idx_])
-#         X_.append(data_[i][2][:, x_idx_, :])
-#         Y_.append(data_[i][3][:, y_idx_, :])
-#         Z_.append(data_[i][4][:, z_idx_])
-#         #print(i, data_[i][0][:, v_idx_].shape, data_[i][1][:, w_idx_].shape)
-#     V_ = np.concatenate(V_, axis = 0)
-#     W_ = np.concatenate(W_, axis = 0)
-#     X_ = np.concatenate(X_, axis = 0)
-#     Y_ = np.concatenate(Y_, axis = 0)
-#     Z_ = np.concatenate(Z_, axis = 0)
-#     #print(V_.shape, W_.shape, X_.shape, Y_.shape, Z_.shape)
-#     # Apply features selection heuristic
-#     V_p_ = V_[:, :]
-#     W_p_ = W_[:, :]
-#     X_p_ = X_[..., F_idx_ > tau]
-#     Y_p_ = Y_[..., F_idx_ > tau]
-#     G_sl_ = np.concatenate([i*np.ones((X_p_.shape[-2], 1)) for i in range(X_p_.shape[-1])], axis = 1) # Group Lasso index for spatial features
-#     #G_sl_ = np.concatenate([i*np.ones((1, X_p_.shape[-1])) for i in range(X_p_.shape[-2])], axis = 0) # Group Lasso index for weather features
-#     G_dl_ = np.concatenate([i*np.ones((1, X_p_.shape[-1])) for i in range(X_p_.shape[-2])], axis = 0)
-#     #print(V_p_.shape, W_p_.shape, X_p_.shape, Y_p_.shape, G_sl_.shape, G_dl_.shape)
-#     del V_, W_, X_, Y_
-#     # Concatenate all the dimensions
-#     X_pp_, Y_pp_, G_sl_p_, G_dl_p_ = [], [], [], []
-#     for d in range(X_p_.shape[1]):
-#         X_pp_.append(X_p_[:, d, :])
-#         Y_pp_.append(Y_p_[:, d, :])
-#         G_sl_p_.append(G_sl_[d, :])
-#         G_dl_p_.append(G_dl_[d, :])
-#
-#     X_pp_   = np.concatenate(X_pp_, axis = -1)
-#     Y_pp_   = np.concatenate(Y_pp_, axis = -1)
-#     G_sl_p_ = np.concatenate(G_sl_p_, axis = -1)
-#     G_dl_p_ = np.concatenate(G_dl_p_, axis = -1)
-#     #print(X_pp_.shape, Y_pp_.shape, G_sl_p_.shape, G_dl_p_.shape)
-#     del X_p_, Y_p_, G_sl_, G_dl_
-#     # Concatenate by hours
-#     V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_ = [], [], [], [], []
-#     for n in range(int(V_p_.shape[0]/24)):
-#         k = n*24
-#         l = (n + 1)*24
-#         V_pp_.append(V_p_[k:l, ...][:,np.newaxis])
-#         W_pp_.append(W_p_[k:l, ...][:, np.newaxis])
-#         X_ppp_.append(X_pp_[k:l, ...][:, np.newaxis, :])
-#         Y_ppp_.append(Y_pp_[k:l, ...][:, np.newaxis, :])
-#         Z_p_.append(Z_[k:l, ...][:, np.newaxis, :])
-#     V_pp_  = np.concatenate(V_pp_, axis = 1)
-#     W_pp_  = np.concatenate(W_pp_, axis = 1)
-#     X_ppp_ = np.concatenate(X_ppp_, axis = 1)
-#     Y_ppp_ = np.concatenate(Y_ppp_, axis = 1)
-#     Z_p_   = np.concatenate(Z_p_, axis = 1)
-#     return V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_, G_sl_p_, G_dl_p_
-
 # Load data combining multiple sources
 def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, v_idx_ = [[0, 1, 2, 3, 4], [5, 6, 7], [8, 9]],
                                                                                 w_idx_ = [[0, 1, 2, 3, 4], [5, 6, 7], [8, 9]],
-                                                                                x_idx_ = [[0, 1, 3, 4, 5, 11, 12, 13, 14], [1, 2, 14], [6, 7, 8, 9, 10]],
-                                                                                y_idx_ = [[0, 1, 2, 4, 5, 6, 12, 13, 14, 15], [2, 3, 15], [7, 8, 9, 10, 11]],
-                                                                                z_idx_ = [[0], [0, 1, 2, 4, 5, 6, 7, 8], [2, 3, 6, 7]]):
+                                                                                x_idx_ = [[2, 3, 4, 5, 11], [1, 2, 14], [7, 8, 9, 10]],
+                                                                                y_idx_ = [[3, 4, 5, 6, 12], [2, 3, 15], [8, 9, 10, 11]],
+                                                                                z_idx_ = [[0, 1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 7], [0, 1, 2, 3, 4, 7]]):
     # Combine necessary index for experiments
     v_all_idx_ = []
     w_all_idx_ = []
@@ -147,28 +109,30 @@ def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, 
     # Get unique index
     v_idx_ = v_all_idx_
     w_idx_ = w_all_idx_
-    x_idx_ = list(set(chain.from_iterable(x_all_idx_)))
-    y_idx_ = list(set(chain.from_iterable(y_all_idx_)))
-    z_idx_ = list(set(chain.from_iterable(z_all_idx_)))
+    x_idx_ = sorted(list(set(chain.from_iterable(x_all_idx_))))
+    y_idx_ = sorted(list(set(chain.from_iterable(y_all_idx_))))
+    z_idx_ = sorted(list(set(chain.from_iterable(z_all_idx_))))
     print(v_idx_)
     print(w_idx_)
     print(x_idx_)
     print(y_idx_)
     print(z_idx_)
     # Concatenate all chucks of data in matrix form
-    V_, W_, X_, Y_, Z_ = [], [], [], [], []
+    V_, W_, X_, Y_, Z_, ZZ_ = [], [], [], [], [], []
     for i in range(len(data_)):
         V_.append(data_[i][0][:, v_idx_])
         W_.append(data_[i][1][:, w_idx_])
         X_.append(data_[i][2][:, x_idx_, :])
         Y_.append(data_[i][3][:, y_idx_, :])
         Z_.append(data_[i][4][:, z_idx_])
+        ZZ_.append(data_[i][5][:, z_idx_])
         #print(i, data_[i][0][:, v_idx_].shape, data_[i][1][:, w_idx_].shape)
-    V_ = np.concatenate(V_, axis = 0)
-    W_ = np.concatenate(W_, axis = 0)
-    X_ = np.concatenate(X_, axis = 0)
-    Y_ = np.concatenate(Y_, axis = 0)
-    Z_ = np.concatenate(Z_, axis = 0)
+    V_  = np.concatenate(V_, axis = 0)
+    W_  = np.concatenate(W_, axis = 0)
+    X_  = np.concatenate(X_, axis = 0)
+    Y_  = np.concatenate(Y_, axis = 0)
+    Z_  = np.concatenate(Z_, axis = 0)
+    ZZ_ = np.concatenate(ZZ_, axis = 0)
     #print(V_.shape, W_.shape, X_.shape, Y_.shape, Z_.shape)
     # Apply features selection heuristic
     V_p_ = V_[:, :]
@@ -183,6 +147,7 @@ def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, 
     # Concatenate all the dimensions
     X_pp_, Y_pp_, G_sl_p_, G_dl_p_ = [], [], [], []
     for d in range(X_p_.shape[1]):
+
         X_pp_.append(X_p_[:, d, :])
         Y_pp_.append(Y_p_[:, d, :])
         G_sl_p_.append(G_sl_[d, :])
@@ -195,7 +160,7 @@ def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, 
     #print(X_pp_.shape, Y_pp_.shape, G_sl_p_.shape, G_dl_p_.shape)
     del X_p_, Y_p_, G_sl_, G_dl_
     # Concatenate by hours
-    V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_ = [], [], [], [], []
+    V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_, ZZ_p_ = [], [], [], [], [], []
     for n in range(int(V_p_.shape[0]/24)):
         k = n*24
         l = (n + 1)*24
@@ -204,12 +169,15 @@ def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, 
         X_ppp_.append(X_pp_[k:l, ...][:, np.newaxis, :])
         Y_ppp_.append(Y_pp_[k:l, ...][:, np.newaxis, :])
         Z_p_.append(Z_[k:l, ...][:, np.newaxis, :])
+        ZZ_p_.append(ZZ_[k:l, ...][:, np.newaxis, :])
+
     V_pp_  = np.concatenate(V_pp_, axis = 1)
     W_pp_  = np.concatenate(W_pp_, axis = 1)
     X_ppp_ = np.concatenate(X_ppp_, axis = 1)
     Y_ppp_ = np.concatenate(Y_ppp_, axis = 1)
     Z_p_   = np.concatenate(Z_p_, axis = 1)
-    return V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_, G_sl_p_, G_dl_p_, v_all_idx_
+    ZZ_p_  = np.concatenate(ZZ_p_, axis = 1)
+    return V_pp_, W_pp_, X_ppp_, Y_ppp_, Z_p_, ZZ_p_, G_sl_p_, G_dl_p_, v_all_idx_
 
 # Split Dataset in training and testing
 def _training_and_testing_dataset(X_, r_tr = 0.75):
@@ -257,6 +225,9 @@ def _dense_learning_dataset(X_fc_, Y_ac_, Z_, G_, lag, AR = 0,
     g_ar_ = np.ones((X_ar_.shape[-1],))*(np.unique(G_)[-1] + 1)
     g_cs_ = np.ones((X_cs_.shape[-1],))*(np.unique(G_)[-1] + 2)
     g_tm_ = np.ones((Z_dl_.shape[-1],))*(np.unique(G_)[-1] + 3)
+    print(g_ar_)
+    print(g_cs_)
+    print(g_tm_)
     #print(G_.shape, g_ar_.shape, g_cs_.shape, g_dl_.shape, G_dl_.shape)
     # Form covariate vector for dense learning
     Y_dl_ = np.swapaxes(np.swapaxes(Y_ac_[:, lag + 1:, ...], 0, 1), -2, -1)
@@ -301,7 +272,7 @@ def _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_stand = 0,
     Y_dl_tr_p_ = Y_dl_tr_.copy()
     x_dl_scaler_ = []
     y_dl_scaler_ = []
-    for i_hour in range(24):
+    for i_hour in range(X_dl_tr_.shape[-1]):
         # Define Standardization functions
         _x_dl_scaler = StandardScaler().fit(X_dl_tr_[..., i_hour])
         _y_dl_scaler = StandardScaler().fit(Y_dl_tr_[..., i_hour])
@@ -331,7 +302,23 @@ def _sparse_learning_stand(X_sl_tr_, y_sl_tr_, X_sl_ts_, x_stand = 0, y_stand = 
     #print(X_sl_tr_p_.shape, X_sl_ts_p_.shape, y_sl_tr_p_.shape)
     return X_sl_tr_p_, y_sl_tr_p_, X_sl_ts_p_, [_x_sl_scaler, _y_sl_scaler]
 
+# Loading spatial masks
+def _load_spatial_masks(i_resources_, path, map_file_name   = r"USland_0.125_(-125,-112)_(32,43).pkl",
+                                            masks_file_name = r"density_grid_0.125_(-125,-112)_(32,43).pkl"):
+    # Load the index of US land in the NOAA operational forecast
+    US_land_ = pd.read_pickle(path + map_file_name)
+    # Load the index of Demand, Solar, and Wind land in the NOAA operational forecast
+    D_den_, S_den_, W_den_ = pd.read_pickle(path + masks_file_name)
+    #print(US_land_.shape, D_den_.shape, S_den_.shape, W_den_.shape)
+    # Define spatial feature masks
+    F_ = np.zeros(US_land_.shape)
+    for i_resource in i_resources_:
+        F_ += [D_den_, S_den_, W_den_][i_resource]
+    #M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, [D_den_, S_den_, W_den_][i_resource]]
+    return [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
+
 __all__ = ['_load_data_in_chunks',
+           '_load_spatial_masks',
            '_multisource_structure_dataset',
            '_training_and_testing_dataset',
            '_sparse_learning_dataset_format',

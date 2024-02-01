@@ -47,7 +47,11 @@ def _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
     #idx_exp_           = np.random.RandomState(seed = 0).permutation(N_exps)
     #idx_exps_in_batch_ = [np.random.permutation(N_exps)[i*N_exps_per_batch:(i + 1)*N_exps_per_batch] for i in range(N_batches)][i_batch]
     # Get experiment indexes in Batch
-    idx_exps_in_batch_ = [np.arange(N_exps, dtype = int)[i*N_exps_per_batch:(i + 1)*N_exps_per_batch] for i in range(N_batches)][i_batch]
+    np.random.seed(0)
+    #idx_exps_ = np.arange(N_exps, dtype = int)
+    idx_exps_ = np.random.permutation(N_exps)
+    print(idx_exps_)
+    idx_exps_in_batch_ = [idx_exps_[i*N_exps_per_batch:(i + 1)*N_exps_per_batch] for i in range(N_batches)][i_batch]
     # Get experiment indexes in Job
     idx_exps_in_job_   = [idx_exps_in_batch_[i*N_exps_per_job:(i + 1)*N_exps_per_job] for i in range(N_jobs)][i_job]
     return idx_exps_in_job_
@@ -88,7 +92,7 @@ def _flatten_DataFrame(df_):
 
 # Save data in a pickle file
 def _save_dict(_data, path, file_name):
-    with open(file_name, 'wb') as _handle:
+    with open(path + file_name, 'wb') as _handle:
         pickle.dump(_data, _handle)
 
 __all__ = ['_experiments',

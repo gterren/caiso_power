@@ -1,6 +1,8 @@
-import gpytorch, torch
+import gpytorch, torch, copy
 
 import numpy as np
+import pandas as pd
+
 import scipy as sp
 
 from scipy.linalg import inv
@@ -22,8 +24,13 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel, M
 from sklearn.gaussian_process.kernels import RationalQuadratic, ExpSineSquared, DotProduct
 
 
-def _random(low = -2.5, high = 2.5):
-    return torch.tensor(np.exp(float(np.random.uniform(low, high, size = 1)[0])))
+path_to_params = r'/home/gterren/caiso_power/GP_param/'
+
+def _get_param_names(_model):
+    return [param_name for param_name, param in _model.named_parameters()]
+
+def _get_param_values(_model):
+    return [param.item() for param_name, param in _model.named_parameters()]
 
 # Fit Gaussian process using SkLearn
 def _skGPR_fit(X_, y_, g_, param_):
@@ -61,42 +68,35 @@ class _GPR(gpytorch.models.ExactGP):
     def __init__(self, X_, y_, g_, _like, kernel, degree, hrzn, multiple_length_scales = False):
         super(_GPR, self).__init__(X_, y_, _like)
         self.mean_module = gpytorch.means.ConstantMean()
-        #self.mean_module = gpytorch.means.ConstantMean(constant_prior = gpytorch.priors.SmoothedBoxPrior(1e-3, 10))
         # Random Parameters Initialization
         self.multiple_length_scales = multiple_length_scales
         # Define features index
-        idx_dim_  = torch.linspace(0, g_.shape[0] - 1, g_.shape[0], dtype = int)
+        idx_dim_ = torch.linspace(0, g_.shape[0] - 1, g_.shape[0], dtype = int)
         # Treat features and index independently
-        idx_      = idx_dim_[g_ != torch.unique(g_)[-1]]
-        idx_bias_ = idx_dim_[g_ == torch.unique(g_)[-1]]
-
-        #idx_ = range(X_.shape[1] - hrzn)
-        #idx_ = range(X_.shape[1])
+        # idx_others_  = idx_dim_[(g_ != 0) & (g_ != 1) & (g_ != 2)]
+        # idx_ft_      = idx_dim_[(g_ == 0) | (g_ == 1) | (g_ == 2)]
+        idx_dim_all_ = [idx_dim_]
         # Define features kernel
-        _K = self.__define_kernel(kernel, degree, idx_dim_ = idx_)
-        self.covar_module = _K
-
+        self.covar_module = self.__define_kernel(kernel, degree, idx_dim_ = idx_dim_all_)
         # Define constant kernel for bias
-        _K_bias = self.__define_kernel(kernel   = 'linear',
-                                       degree   = 0,
-                                       idx_dim_ = idx_bias_)
-        # self.covar_module = _K + _K_bias
-
-        # Multiple-kernel learning
-        if hrzn > 0:
-            idx_rc_ = idx_dim_[g_ == torch.unique(g_)[-2]]
-
-            #idx_rc_ = range(X_.shape[1] - hrzn, X_.shape[1])
-
-            # Define kernel for recursive predictions
-            _K_chain = self.__define_kernel(kernel   = 'linear',
-                                            degree   = 0,
-                                            idx_dim_ = idx_rc_)
-            # Combine features and bias kernels
-            self.covar_module = _K + _K_chain + _K_bias
-        else:
-            # Combine features and bias kernels
-            self.covar_module = _K + _K_bias
+        # _K_bias = self.__define_kernel(kernel   = 'linear',
+        #                                degree   = 0,
+        #                                idx_dim_ = idx_bias_)
+        # # self.covar_module = _K + _K_bias
+        # print(hrzn)
+        # # Multiple-kernel learning
+        # if hrzn > 0:
+        #     idx_rc_ = idx_dim_[g_ == torch.unique(g_)[-2]]
+        #
+        #     # Define kernel for recursive predictions
+        #     _K_chain = self.__define_kernel(kernel   = 'linear',
+        #                                     degree   = 0,
+        #                                     idx_dim_ = idx_rc_)
+        #     # Combine features and bias kernels
+        #     self.covar_module = _K + _K_chain + _K_bias
+        # else:
+        #     # Combine features and bias kernels
+        #     self.covar_module = _K + _K_bias
 
     # Define a kernel
     def __define_kernel(self, kernel, degree, idx_dim_ = None):
@@ -104,72 +104,119 @@ class _GPR(gpytorch.models.ExactGP):
         #     dim = int(idx_dim_.shape[0])
         # else:
         dim = None
-        # Random Initialization Covariance Matrix
-        #self.likelihood.noise = gpytorch.priors.GammaPrior(1., 10.).sample() + 1e-4
+        #_prior = gpytorch.priors.SmoothedBoxPrior(1e-5, 2.5)
+        #_prior = gpytorch.priors.GammaPrior(.4, 4.)
+        _prior = gpytorch.priors.GammaPrior(1., 10.)
+        #_prior = gpytorch.priors.HalfCauchyPrior(1.)
+        #_prior = gpytorch.priors.NormalPrior(0, 1)
+        # Random Initialization noise variance
+        self.likelihood.noise = _prior.sample()
         # Random Initialization Constant Mean
-        self.mean_module.constant = gpytorch.priors.GammaPrior(1., 10.).sample()
+        self.mean_module.constant = _prior.sample()
         # Linear kernel
         if kernel == 'linear':
-            _K = gpytorch.kernels.LinearKernel(variance_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                               active_dims    = idx_dim_)
+            _K = gpytorch.kernels.LinearKernel(active_dims = idx_dim_[0])
             # Linear kernel parameter initialization
-            _K.variance = gpytorch.priors.GammaPrior(1., 10.).sample()
-            return _K
+            _K.variance = _prior.sample()
         # Radian Basis Function Kernel
         if kernel == 'RBF':
-            _K = gpytorch.kernels.RBFKernel(lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                            active_dims       = idx_dim_,
-                                            ard_num_dims      = dim)
+            _K_1 = gpytorch.kernels.RBFKernel(active_dims  = idx_dim_[0],
+                                              ard_num_dims = dim)
             # RBF Kernel parameter initialization
-            for i in range(_K.lengthscale.shape[1]): _K.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K_1.lengthscale = _prior.sample()
+            _K               = gpytorch.kernels.ScaleKernel(_K_1)
+            _K.outputscale   = _prior.sample()
         # Polynomial Expansion Kernel
         if kernel == 'poly':
-            _K = gpytorch.kernels.PolynomialKernel(power        = degree,
-                                                   offset_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                                   active_dims  = idx_dim_)
+            _K_1 = gpytorch.kernels.PolynomialKernel(power       = degree,
+                                                     active_dims = idx_dim_[0])
             # Polynomial Kernel parameter initialization
-            _K.offset = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K_1.offset    = _prior.sample()
+            _K             = gpytorch.kernels.ScaleKernel(_K_1)
+            _K.outputscale = _prior.sample()
         # Matern Kernel
         if kernel == 'matern':
-            _K = gpytorch.kernels.MaternKernel(nu                = degree,
-                                               lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                               active_dims       = idx_dim_,
-                                               ard_num_dims      = dim)
+            _K_1 = gpytorch.kernels.MaternKernel(nu           = degree,
+                                                 active_dims  = idx_dim_[0],
+                                                 ard_num_dims = dim)
             # Matern Kernel parameter initialization
-            for i in range(_K.lengthscale.shape[1]): _K.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K_1.lengthscale = _prior.sample()
+            _K               = gpytorch.kernels.ScaleKernel(_K_1)
+            _K.outputscale   = _prior.sample()
         # Rational Quadratic Kernel
         if kernel == 'RQ':
-            _K = gpytorch.kernels.RQKernel(lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                           active_dims       = idx_dim_,
-                                           ard_num_dims      = dim)
+            _K_1 = gpytorch.kernels.RQKernel(active_dims  = idx_dim_[0],
+                                           ard_num_dims = dim)
             # RQ Kernel parameters initialization
-            for i in range(_K.lengthscale.shape[1]): _K.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K_1.lengthscale = _prior.sample()
+            _K_1.alpha       = _prior.sample()
+            _K               = gpytorch.kernels.ScaleKernel(_K_1)
+            _K.outputscale   = _prior.sample()
         # Piecewise Polynomial Kernel
         if kernel == 'PW':
-            _K = gpytorch.kernels.PiecewisePolynomialKernel(q                 = degree,
-                                                            lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                                            active_dims       = idx_dim_,
-                                                            ard_num_dims      = dim)
+            _K = gpytorch.kernels.PiecewisePolynomialKernel(q            = degree,
+                                                            active_dims  = idx_dim_[0],
+                                                            ard_num_dims = dim)
             # PW Kernel parameters initialization
-            for i in range(_K.raw_lengthscale.shape[1]): _K.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K.lengthscale = _prior.sample()
         # Stationary and non-stationary Kernel
-        if kernel == 'S-NS':
-            _K_1 = gpytorch.kernels.LinearKernel(variance_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                               active_dims    = idx_dim_)
-            # Linear kernel parameter initialization
-            _K_1.variance = gpytorch.priors.GammaPrior(1., 10.).sample()
+        if kernel == 'linear_exp_rbf':
+            _K_0 = gpytorch.kernels.LinearKernel(active_dims = idx_dim_[1])
+            _K_2 = gpytorch.kernels.RBFKernel(active_dims    = idx_dim_[2],
+                                              ard_num_dims   = dim)
+            _K_1 = gpytorch.kernels.ScaleKernel(_K_0)
+            _K_3 = gpytorch.kernels.ScaleKernel(_K_2)
 
-            _K_2 = gpytorch.kernels.RBFKernel(lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                              active_dims       = idx_dim_,
-                                                ard_num_dims      = dim)
-            # RBF Kernel parameter initialization
-            for i in range(_K_2.lengthscale.shape[1]): _K_2.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
-            return _K_1 * _K_2
+            # Kernel parameter initialization
+            _K_0.variance    = _prior.sample()
+            _K_1.outputscale = _prior.sample()
+            _K_2.lengthscale = _prior.sample()
+            _K_3.outputscale = _prior.sample()
+            # Define multiple kernel
+            _K = _K_1 + _K_2
+        if kernel == 'linear_exp_matern':
+            _K_0 = gpytorch.kernels.LinearKernel(active_dims  = idx_dim_[1])
+            _K_2 = gpytorch.kernels.MaternKernel(nu           = degree,
+                                                 active_dims  = idx_dim_[2],
+                                                 ard_num_dims = dim)
+            _K_1 = gpytorch.kernels.ScaleKernel(_K_0)
+            _K_3 = gpytorch.kernels.ScaleKernel(_K_2)
+            # Kernel parameter initialization
+            _K_0.variance    = _prior.sample()
+            _K_1.outputscale = _prior.sample()
+            _K_2.lengthscale = _prior.sample()
+            _K_3.outputscale = _prior.sample()
+            # Define multiple kernel
+            _K = _K_1 + _K_2
+        if kernel == 'linear_exp_rq':
+            _K_0 = gpytorch.kernels.LinearKernel(active_dims = idx_dim_[1])
+            _K_2 = gpytorch.kernels.RQKernel(active_dims  = idx_dim_[2],
+                                             ard_num_dims = dim)
+            _K_1 = gpytorch.kernels.ScaleKernel(_K_0)
+            _K_3 = gpytorch.kernels.ScaleKernel(_K_2)
+            # Kernel parameter initialization
+            _K_0.variance    = _prior.sample()
+            _K_1.outputscale = _prior.sample()
+            _K_2.lengthscale = _prior.sample()
+            _K_2.alpha       = _prior.sample()
+            _K_3.outputscale = _prior.sample()
+            # Define multiple kernel
+            _K = _K_1 + _K_2
+        if kernel == 'linear_period':
 
-        # Amplitude coefficient
-        _K = gpytorch.kernels.ScaleKernel(_K, outputscale_prior = gpytorch.priors.GammaPrior(1., 10.))
-        # Amplitude coefficient parameter initialization
-        _K.outputscale = gpytorch.priors.GammaPrior(1., 10.).sample()
+            _K_0 = gpytorch.kernels.LinearKernel(active_dims = idx_dim_[1])
+            _K_2 = gpytorch.kernels.PeriodicKernel(active_dims  = idx_dim_[2],
+                                                   ard_num_dims = dim)
+
+            _K_1 = gpytorch.kernels.ScaleKernel(_K_0)
+            _K_3 = gpytorch.kernels.ScaleKernel(_K_3)
+            _K_0.variance      = _prior.sample()
+            _K_2.lengthscale   = _prior.sample()
+            _K_2.period_length =  _prior.sample()
+            _K_1.outputscale   = _prior.sample()
+            _K_3.outputscale   = _prior.sample()
+
+
         return _K
 
     def forward(self, x):
@@ -190,27 +237,41 @@ def _GPR_fit(X_, y_, g_, param_):
             # Use the adam optimizer
             _optimizer = torch.optim.Adam(_model.parameters(), lr = .1)  # Includes GaussianLikelihood parameters
             # "Loss" for GPs - the marginal log likelihood
-            _mll = gpytorch.mlls.ExactMarginalLogLikelihood(_like, _model)
-            # Begins Iterative Optimization
-            for i in range(max_iter):
-                # Zero gradients from previous iteration
-                _optimizer.zero_grad()
-                # Output from model
-                f_hat_ = _model(X_)
-                # Calc loss and backprop gradients
-                _nmll = - _mll(f_hat_, y_)
-                _nmll.backward()
-                _optimizer.step()
-                #print(i, np.around(float(_nmll.detach().numpy()), 2))
-                nmll_.append(np.around(float(_nmll.detach().numpy()), 2) )
-                if np.isnan(nmll_[-1]):
-                    return _model, _like, np.inf
-                if i > early_stop:
-                    if np.unique(nmll_[-early_stop:]).shape[0] == 1:
-                        break
-            return _model, _like, nmll_[-1]
+            _mll             = gpytorch.mlls.ExactMarginalLogLikelihood(_like, _model)
+            best_nmll        = np.inf
+            early_stop_count = 0
+            try:
+                # Begins Iterative Optimization
+                for i in range(max_iter):
+                    # Zero gradients from previous iteration
+                    _optimizer.zero_grad()
+                    # Output from model
+                    f_hat_ = _model(X_)
+                    # Calc loss and backprop gradients
+                    _nmll = - _mll(f_hat_, y_)
+                    _nmll.backward()
+                    _optimizer.step()
+                    new_nmll = np.around(_nmll.detach().numpy(), 2)
+                    # Abort if nan is found
+                    if np.isnan(new_nmll):
+                        return _model, _like, best_nmll
+                    # Save last minima nmll and models
+                    if best_nmll > new_nmll:
+                        best_nmll   = new_nmll
+                        _best_model = copy.deepcopy(_model)
+                        _best_like  = copy.deepcopy(_like)
+                        early_stop_count = 0
+                    else:
+                        # Keep track of the early counting
+                        early_stop_count += 1
+                        # Enforce early stopping
+                        if early_stop_count == early_stop:
+                            break
+                return _best_model, _best_like, best_nmll
+            except:
+                return _model, _like, best_nmll
 
-        kernel, degree, hrzn, max_iter, n_init, early_stop = params_
+        kernel, degree, hrzn, max_iter, n_init, early_stop, key = params_
         # Add dummy feature for the bias
         X_ = np.concatenate((X_, np.ones((X_.shape[0], 1))), axis = 1)
         g_ = np.concatenate((g_, np.ones((1,))*np.unique(g_)[-1] + 1), axis = 0)
@@ -219,20 +280,38 @@ def _GPR_fit(X_, y_, g_, param_):
         y_p_ = torch.tensor(y_, dtype = torch.float)
         g_p_ = torch.tensor(g_, dtype = torch.float)
         # initialize likelihood and model
-        _like  = gpytorch.likelihoods.GaussianLikelihood(noise_prior = gpytorch.priors.GammaPrior(1., 10.))
+        _like  = gpytorch.likelihoods.GaussianLikelihood(noise_constraint = gpytorch.constraints.GreaterThan(1e-10))
         _model = _GPR(X_p_, y_p_, g_p_, _like, kernel, degree, hrzn)
-        return __optimize(_model, _like, X_p_, y_p_, max_iter, early_stop)
 
-    kernel, degree, hrzn, max_iter, n_init, early_stop = param_
+        # init_params_ = _get_param_values(_model)
+
+        _model, _like, end_nmll = __optimize(_model, _like, X_p_, y_p_, max_iter, early_stop)
+
+        # name_params_  = _get_param_names(_model)
+        # name_params_ += ['NMLL']
+        # name_params_  = [name_param + '_init' for name_param in name_params_] + name_params_
+        # end_params_   = _get_param_values(_model)
+        # init_params_ += [init_nmll]
+        # end_params_  += [end_nmll]
+        # h_            = np.array(init_params_ + end_params_)
+
+        return _model, _like, end_nmll
+
+    kernel, degree, hrzn, max_iter, n_init, early_stop, key = param_
+    print(kernel, degree, hrzn, max_iter, n_init, early_stop, key)
     # Storage Variables Initialization
     model_ = []
     nmll_  = []
+    #H_     = []
     # Perform multiple Random Initializations
     for i in range(n_init):
         _model, _like, nmll = __fit(X_, y_, g_, param_)
         # Get Results
         model_.append([_model, _like])
         nmll_.append(nmll)
+        #H_.append(h_)
+
+    #pd.DataFrame(np.stack(H_).T, index = name_params_).to_csv(path_to_params + key + '_{}'.format(hrzn) + '.csv')
     # Best Results of all different Initialization
     _model, _like = model_[np.argmin(nmll_)]
     nmll          = nmll_[np.argmin(nmll_)]
@@ -294,12 +373,6 @@ class _MT_GPR(gpytorch.models.ExactGP):
             dim = int(idx_dim_.shape[0])
         else:
             dim = None
-        # Constraint name: likelihood.raw_task_noises_constraint                   constraint = GreaterThan(1.000E-04)
-        # Constraint name: covar_module.task_covar_module.raw_var_constraint       constraint = Positive()
-        # Random Initialization Covariance Matrix
-        #if self.random_init:
-        #    self.likelihood.raw_task_noises.data.fill_(self.likelihood.raw_task_noises_constraint.inverse_transform(_random()))
-
         # Linear kernel
         if kernel == 'linear':
             _K = gpytorch.kernels.LinearKernel(variance_prior = gpytorch.priors.GammaPrior(1., 10.),
@@ -352,8 +425,8 @@ class _MT_GPR(gpytorch.models.ExactGP):
             _K_1.variance = gpytorch.priors.GammaPrior(1., 10.).sample()
 
             _K_2 = gpytorch.kernels.RBFKernel(lengthscale_prior = gpytorch.priors.GammaPrior(1., 10.),
-                                              active_dims       = idx_dim_,
-                                                ard_num_dims      = dim)
+                                               active_dims       = idx_dim_,
+                                               ard_num_dims      = dim)
             # RBF Kernel parameter initialization
             for i in range(_K_2.lengthscale.shape[1]): _K_2.lengthscale[0, i] = gpytorch.priors.GammaPrior(1., 10.).sample()
             return _K_1 * _K_2

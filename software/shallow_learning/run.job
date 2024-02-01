@@ -1,0 +1,22 @@
+#!/bin/bash -l
+#SBATCH --job-name=caiso_power-models
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=40
+#SBATCH --time=48:00:00
+##SBATCH --mem=187G
+##SBATCH --output=res.txt
+##SBATCH -p default
+##SBATCH --mail-type=BEGIN,END
+##SBATCH --mail-user=guillermoterren@ucsb.edu
+#SBATCH --output=CAISO_%x.%j.out
+
+export PATH=$PATH:/home/gterren/anaconda3/bin
+source activate oasis
+cd /home/gterren/caiso_power/software/shallow_learning
+
+#time mpirun -np 2 python -W ignore test_shallow_learning_debugging.py 1 $1 4 $2
+#time mpirun -np 2 python -W ignore val_shallow_learning.py 2 $1 2 $2
+#time mpirun -np 2 python -W ignore test_shallow_learning.py 0 $1 2 $2
+#time mpirun -np 2 python -W ignore model_shallow_learning.py $1
+
+#time mpirun -np 2 python -W ignore test_shallow_learning.py 0 $1 2 $2
