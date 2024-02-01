@@ -5,18 +5,21 @@ import numpy as np
 from time import sleep
 from datetime import datetime, date, timedelta
 from itertools import product, chain
-
-from sklearn.linear_model import Lasso, ElasticNet, OrthogonalMatchingPursuit, Ridge, ARDRegression, BayesianRidge
-from sklearn.preprocessing import StandardScaler
 from group_lasso import GroupLasso
-
 from scipy.stats import norm, multivariate_normal
-
 import properscoring as ps
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import Lasso, ElasticNet, OrthogonalMatchingPursuit, Ridge, ARDRegression, BayesianRidge
+from sklearn.tree import DecisionTreeRegressor
 
 GroupLasso.LOG_LOSSES = True
 
 from GP_utils import *
+
+from ngboost import NGBRegressor
+from ngboost.scores import LogScore, CRPScore
+from ngboost.distns import Normal, MultivariateNormal
 
 # # Load data in a compressed file
 # def _load_data_in_chunks(years_, path):
@@ -245,7 +248,6 @@ def _naive_forecasts(Y_ac_, Y_fc_, lag):
     #print(Y_per_fc_.shape, Y_ca_fc_.shape)
     Y_ca_fc_  = np.swapaxes(np.swapaxes(Y_ca_fc_, 0, 1), -2, -1)
     Y_per_fc_ = np.swapaxes(np.swapaxes(Y_per_fc_, 0, 1), -2, -1)
-
     return Y_per_fc_, Y_ca_fc_, Y_clm_fc_
 
 # # Generate sparse learning dataset
@@ -369,7 +371,7 @@ def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk 
     return X_rc_, Y_[..., hrzn], g_rc_
 
 # Get combination of possible parameters
-def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, sl, dl):
+def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, sl, dl):
     thetas_ = []
     # Lasso parameters
     if sl == 0:
@@ -391,6 +393,13 @@ def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, sl, 
     # Gaussian processes Kernels
     if (dl == 2) or (dl == 3):
         thetas_.append(list(xis_))
+    # Natural Gradient Boosting number of estimator
+    if dl == 4:
+        thetas_.append(list(kappas_[0]))
+        thetas_.append(list(kappas_[1]))
+        thetas_.append(list(kappas_[2]))
+        thetas_.append(list(kappas_[3]))
+
     return list(product(*thetas_)), len(list(product(*thetas_)))
 
 # # Parallelize experiment combinations
@@ -405,10 +414,30 @@ def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, sl, 
 #         row_      = meta_ + data_[i_asset, :].tolist()
 #         csv.writer(open(file_name, 'a')).writerow(row_)
 
+# Natural Gradiente Boosting for Regression
+def _NaturalGradientBoostingRegression(X_, Y_, g_, n_estimators   = 100,
+                                                   minibatch_frac = 0.5,
+                                                   learning_rate  = 0.01,
+                                                   col_sample     = 0.5):
+    #print(n_estimators, minibatch_frac, learning_rate, col_sample)
+    return [NGBRegressor(Base             = DecisionTreeRegressor(criterion = 'friedman_mse',
+                                                                  max_depth = 5),
+                         Dist             = Normal,
+                         Score            = LogScore,
+                         n_estimators     = n_estimators,
+                         minibatch_frac   = minibatch_frac,
+                         learning_rate    = learning_rate,
+                         col_sample       = col_sample,
+                         tol              = 1e-4,
+                         natural_gradient = True,
+                         verbose          = False,
+                         verbose_eval     = 1).fit(X_, Y_[:, i_tsk], early_stopping_rounds = 10) for i_tsk in range(Y_.shape[-1])]
+
+
 # Bayesian Linear Regression with prior on the parameters
 def _BayesianLinearRegression(X_, Y_, g_, max_iter = 1000):
-    return [BayesianRidge(n_iter = max_iter,
-                          tol    = 0.001).fit(X_, Y_[:, i_tsk]) for i_tsk in range(Y_.shape[-1])]
+    return [BayesianRidge(max_iter = max_iter,
+                          tol      = 0.001).fit(X_, Y_[:, i_tsk]) for i_tsk in range(Y_.shape[-1])]
 
 # Relevance Vector Machine for Regression with prior on the parameters
 def _RelevanceVectorMachine(X_, Y_, g_, threshold_lambda, max_iter = 1000):
@@ -428,20 +457,18 @@ def _RelevanceVectorMachine(X_, Y_, g_, threshold_lambda, max_iter = 1000):
 #
 #     if GP == 'GPytorch': return _GPR_fit(X_, y_, g_, params_)
 #     if GP == 'sklearn':  return _skGPR_fit(X_, y_, g_, params_)
-    
+
+# Gassuain Process for Regression
 def _GaussianProcess(X_, Y_, g_, hrzn, xi, max_iter   = 1000,
                                            n_init     = 5,
-                                           early_stop = 10):
+                                           early_stop = 5,
+                                           key        = ''):
     # Model hyperparameter configurations
-    kernels_ = ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ', 'PW', 'PW', 'PW', 'PW', 'SNS']
-    degrees_ = [0., 0., 2., 3., 1./2., 3./2., 5./2., 0., 0, 1, 2, 3, 0.]
-    params_  = [kernels_[xi], degrees_[xi], hrzn, max_iter, n_init, early_stop]
-
-    GP_ = []
-    for i_tsk in range(Y_.shape[-1]):
-        GP_.append(_GPR_fit(X_, Y_[:, i_tsk], g_, params_))
-
-    return GP_
+    kernels_ = ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ',
+                'linear_exp_rbf', 'linear_exp_matern', 'linear_exp_matern', 'linear_exp_matern', 'linear_exp_rq']
+    degrees_ = [0., 0., 2., 3., 1./2., 3./2., 5./2., 0., 0, 1./2., 3./2., 5./2.,0.]
+    params_  = [kernels_[xi], degrees_[xi], hrzn, max_iter, n_init, early_stop, key]
+    return [_GPR_fit(X_, Y_[:, i_tsk], g_, params_) for i_tsk in range(Y_.shape[-1])]
 
 def _MultiTaskGaussianProcess(X_, Y_, g_, xi, max_iter   = 250,
                                               n_init     = 5,
@@ -454,18 +481,28 @@ def _MultiTaskGaussianProcess(X_, Y_, g_, xi, max_iter   = 250,
     return _tcMTGPR_fit(X_, Y_, g_, params_)
 
 # Dense learning multitask predictive mean
-def _dense_learning_predict_recursive(models_, X_, DL):
+def _dense_learning_predict_recursive(_model, X_, DL):
     # Multitask Gaussian process prediction
     if DL == 3:
-        Y_hat_ = _tcMTGPR_predict(models_, X_, return_cov = False)
+        Y_hat_ = _tcMTGPR_predict(_model, X_, return_cov = False)
     else:
         # Linear models prediction
         if (DL == 0) | (DL == 1):
-            Y_hat_ = models_.predict(X_, return_std = False)
+            Y_hat_ = _model.predict(X_, return_std = False)
         # Gaussian process prediction
         if DL == 2:
-            Y_hat_ = _GPR_predict(models_, X_, return_var = False)
+            Y_hat_ = _GPR_predict(_model, X_, return_var = False)
+        # Natural gradiate boosting prediction
+        if DL == 4:
+            Y_hat_ = _NGBR_predict(_model, X_, return_var = False)
     return Y_hat_
+
+def _NGBR_predict(_model, X_, return_var = False):
+    if return_var:
+        _F_hat = _model.pred_dist(X_)
+        return _F_hat.params['loc'], _F_hat.params['scale']
+    else:
+        return _model.predict(X_)
 
 # Dense learning multitask predictive mean and covariance and noise covariance
 def _dense_learning_multitask_predict(models_, X_, DL):
@@ -518,6 +555,10 @@ def _dense_learning_predict(_DL, X_, DL):
     # Multitask Gaussian process prediction
     if DL == 3:
         return _tcMTGPR_fit(_DL, X_, return_var = True)
+    # Natural Gradient Booostion distribution prediction
+    if DL == 4:
+        m_hat_, s_hat_ = _NGBR_predict(_DL, X_, return_var = True)
+        return m_hat_, s_hat_
 
 # Define Recursive dataset
 def _dense_learning_recursive_prediction(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk = None):
@@ -567,7 +608,7 @@ def _dense_learning_recursive_prediction(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, t
 #         pickle.dump(data_, _f, protocol = pickle.HIGHEST_PROTOCOL)
 
 # Fit dense learning - Bayesian model chain
-def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL):
+def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
     # Initialization multi-task predictive mean
     Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
     models_      = []
@@ -578,17 +619,23 @@ def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, t
         for tsk in range(Y_dl_tr_hat_.shape[1]):
             # Define training and testing recursive dataset
             X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
-            #print(tsk, hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
+            print(tsk, hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
             # Bayesian Linear Regression with Hyperprior
-            if DL == 0: _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_)[0]
+            if DL == 0:
+                _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_)[0]
             # Linear Relevance Vector Machine Regression with Hyperprior
             if DL == 1:
                 _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, threshold_lambda = thetas_[tsk][-1])[0]
             # Gaussian Process for Regression with Hyperprior
-            if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, hrzn, xi = thetas_[tsk][-1])[0]
+            if DL == 2:
+                _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, hrzn, xi = thetas_[tsk][-1], key = key)[0]
+            if DL == 4:
+                _DL = _NaturalGradientBoostingRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, n_estimators   = thetas_[tsk][-4],
+                                                                                                                    learning_rate  = thetas_[tsk][-3],
+                                                                                                                    minibatch_frac = thetas_[tsk][-2],
+                                                                                                                    col_sample     = thetas_[tsk][-1])[0]
             # Make prediction for recursive model
             Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL, X_dl_tr_rc_, DL)
-
             # Save Multitask models
             model_.append(_DL)
         # Save multihorizon models
@@ -598,9 +645,9 @@ def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, t
 # Fit sparse learning model
 def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd):
     # Initialization prediction mean and weights
-    W_hat_ = np.ones((X_sl_ts_stnd_[:, g_sl_ != g_sl_[-1]].shape[1], Y_sl_ts_.shape[1]))
+    W_hat_       = np.ones((X_sl_ts_stnd_[:, g_sl_ != g_sl_[-1]].shape[1], Y_sl_ts_.shape[1]))
+    Y_sl_ts_hat_ = np.zeros(Y_sl_ts_.shape)
     if SL != 4:
-        Y_sl_ts_hat_ = np.zeros(Y_sl_ts_.shape)
         # Train independent multi-task models for each hour
         for tsk in range(Y_sl_ts_.shape[1]):
             #print(tsk, thetas_[tsk], X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape)
@@ -610,8 +657,7 @@ def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, 
                                     tol      = 0.001).fit(X_sl_tr_stnd_, Y_sl_tr_stnd_[:, tsk])
 
             # Orthogonal Matching Persuit (linear regression with l_0 norm applied to the coefficients.)
-            if SL == 1: _SL = OrthogonalMatchingPursuit(n_nonzero_coefs = thetas_[tsk][0],
-                                                        normalize       = False).fit(X_sl_tr_stnd_, Y_sl_tr_stnd_[:, tsk])
+            if SL == 1: _SL = OrthogonalMatchingPursuit(n_nonzero_coefs = thetas_[tsk][0]).fit(X_sl_tr_stnd_, Y_sl_tr_stnd_[:, tsk])
 
             # Elastic net (linear regression with l_1 and l_2 norm apply to coefficients)
             if SL == 2: _SL = ElasticNet(alpha    = thetas_[tsk][0],
@@ -671,7 +717,7 @@ def _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
     S2_dl_ts_hat_     = np.zeros(Y_dl_ts_.shape)
     C_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
+    #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
     # Train an expert models for each hour
     for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
         # Train an expert models for each hour
