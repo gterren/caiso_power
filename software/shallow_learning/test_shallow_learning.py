@@ -14,7 +14,7 @@ i_job, N_jobs, comm = _get_node_info()
 # Degine path to data
 path_to_pds = r"/home/gterren/caiso_power/data/dataset-2023/"
 path_to_aux = r"/home/gterren/caiso_power/data/auxiliary/"
-path_to_rst = r"/home/gterren/caiso_power/results/GPR/"
+path_to_rst = r"/home/gterren/caiso_power/results/BLR/"
 path_to_img = r"/home/gterren/caiso_power/images/"
 
 # Notes:
@@ -224,4 +224,4 @@ for i_exp in i_exps_:
                                _flatten_DataFrame(E_dl_ts_),
                                _flatten_DataFrame(MV_dl_ts_)], axis = 1))
 
-_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}_v4.csv'.format(resource, sl_method, dl_method))
+_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}.csv'.format(resource, sl_method, dl_method))

@@ -18,7 +18,7 @@ done;
 
 # No. Batches
 for A in {0..3}; do
-	sbatch run.job $A;
+	sbatch run_largemem.job $A;
   sleep 5s;
 done;
 
