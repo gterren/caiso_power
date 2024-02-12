@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=test-solar-BLR
+#SBATCH --job-name=test-RVM
 #SBATCH --time=168:00:00
 #SBATCH --nodes=1 --ntasks-per-node=8
 #SBATCH --partition=largemem
@@ -11,5 +11,5 @@ export PATH=$PATH:/home/gterren/anaconda3/bin
 source activate oasis
 cd /home/gterren/caiso_power/software/shallow_learning
 
-time mpirun -np 8 python -W ignore test_shallow_learning.py 1 $1 0 0
+time mpirun -np 8 python -W ignore test_shallow_learning.py $1 $2 1 0
 

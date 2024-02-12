@@ -245,25 +245,6 @@ def _dense_learning_dataset(X_fc_, Y_ac_, Z_, G_, lag, AR = 0,
     #print(np.unique(G_dl_))
     return X_dl_, Y_dl_, G_
 
-# Define Recursive dataset
-def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk = None):
-    # Find 0 coefficients obtained from sparse learning model
-    if tsk == None: idx_ = np.sum(W_hat_, axis = 1) != 0.
-    else:           idx_ = W_hat_[..., tsk] != 0.
-    if RC:
-        # Form recursive dataset and add feature sources indexes
-        if tsk == None: Y_hat_rc_ = np.concatenate([Y_hat_[..., tsk, :hrzn] for tsk in range(Y_hat_.shape[1])], axis = 1)
-        else:           Y_hat_rc_ = Y_hat_[..., tsk, :hrzn]
-        X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_], X_[:, W_hat_.shape[0]:, hrzn], Y_hat_rc_], axis = 1)
-        g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:], np.ones((Y_hat_rc_.shape[1],))*(np.unique(g_)[-1] + 1)], axis = 0)
-        #print(Y_.shape, Y_hat_rc_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
-    else:
-        X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_],
-                                X_[:, W_hat_.shape[0]:, hrzn]], axis = 1)
-        g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:]], axis = 0)
-        #print(Y_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
-    return X_rc_, Y_[..., hrzn], g_rc_
-
 # Standardize dense learning dataset
 def _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_stand = 0,
                                                         y_stand = 0):
@@ -317,7 +298,48 @@ def _load_spatial_masks(i_resources_, path, map_file_name   = r"USland_0.125_(-1
     #M_ = [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, [D_den_, S_den_, W_den_][i_resource]]
     return [np.ones(US_land_.shape), US_land_, D_den_ + S_den_ + W_den_, F_]
 
+def _generate_dataset(X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_, dataset, path):
+    print('Generating dataset...')
+    
+    processed_                            = {}
+    processed_['sparse_learning_data']    = X_sl_
+    processed_['sparse_learning_targets'] = Y_sl_
+    processed_['sparse_learning_groups']  = g_sl_
+    processed_['dense_learning_data']     = X_dl_
+    processed_['dense_learning_targets']  = Y_dl_
+    processed_['dense_learning_groups']   = g_dl_
+    processed_['dummy_variables']         = Z_
+    processed_['meta']                    = ZZ_
+    processed_['caiso_actuals']           = Y_ac_
+    processed_['caiso_forecasts']         = Y_fc_
+
+    with open(path + dataset, 'wb') as _file:
+        pickle.dump(processed_, _file, protocol = pickle.HIGHEST_PROTOCOL)
+
+def _load_processed_dataset(dataset, path):
+    print('Loading dataset...')
+
+    with open(path + dataset, 'rb') as _file:
+        processed_ = pickle.load(_file)
+
+    X_sl_ = processed_['sparse_learning_data']
+    Y_sl_ = processed_['sparse_learning_targets']
+    g_sl_ = processed_['sparse_learning_groups']
+    X_dl_ = processed_['dense_learning_data']
+    Y_dl_ = processed_['dense_learning_targets']
+    g_dl_ = processed_['dense_learning_groups']
+    Z_    = processed_['dummy_variables']
+    ZZ_   = processed_['meta']
+    Y_ac_ = processed_['caiso_actuals']
+    Y_fc_ = processed_['caiso_forecasts']
+
+    del processed_
+
+    return X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_
+
 __all__ = ['_load_data_in_chunks',
+           '_generate_dataset',
+           '_load_processed_dataset',
            '_load_spatial_masks',
            '_multisource_structure_dataset',
            '_training_and_testing_dataset',

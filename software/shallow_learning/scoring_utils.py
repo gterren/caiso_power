@@ -133,29 +133,6 @@ def _IIS(Y_, M_hat_, S2_hat_):
 #         scores_.append(np.concatenate((RMSE_, MAE_, MBE_), axis = 0)[:, np.newaxis, :])
 #     return np.swapaxes(np.concatenate(scores_, axis = 1), 0, 1)
 
-# Baselines det. error metrics
-def _baseline_det_metrics(Y_, Y_hat_):
-    Y_p_     = []
-    Y_hat_p_ = []
-    for hrzn in range(Y_hat_.shape[2]):
-        Y_p_.append(Y_[..., hrzn])
-        Y_hat_p_.append(Y_hat_[..., hrzn])
-    Y_p_     = np.concatenate(Y_p_, axis = 0)
-    Y_hat_p_ = np.concatenate(Y_hat_p_, axis = 0)
-    print(Y_p_.shape, Y_hat_p_.shape)
-    return _sparse_det_metrics(Y_p_, Y_hat_p_)
-
-# Compute deterministic scores for sparse model
-def _sparse_det_metrics(Y_, Y_hat_):
-    scores_ = []
-    # Samples / Tasks / Forecasting horizons
-    for tsk in range(Y_hat_.shape[1]):
-        scores_.append(np.array([_RMSE(Y_[..., tsk], Y_hat_[..., tsk]),
-                                  _MAE(Y_[..., tsk], Y_hat_[..., tsk]),
-                                  _MBE(Y_[..., tsk], Y_hat_[..., tsk])])[..., np.newaxis])
-    scores_ = np.concatenate(scores_, axis = 1).T
-    return pd.DataFrame(scores_, columns = ['RMSE', 'MAE', 'MBE'],
-                                 index   = ['NP15', 'SP15', 'ZP26'][:Y_.shape[1]])
 
 # Probabilistic forecat metrics
 def _prob_metrics(Y_, M_, S2_, Y_hat_):
@@ -238,6 +215,30 @@ def _multivariate_prob_metrics_dist(Y_, M_, Cov_, Y_hat_):
     df_['VS_temporal'] = np.mean(_VS_temporal(Y_, Y_hat_), axis = 0)
     df_['sample']      = np.linspace(0, df_['VS_temporal'].shape[0] - 1, df_['VS_temporal'].shape[0], dtype = int)
     return df_.reset_index(drop = True)
+
+
+# Compute deterministic scores for sparse model
+def _sparse_det_metrics(Y_, Y_hat_):
+    scores_ = []
+    # Samples / Tasks / Forecasting horizons
+    for tsk in range(Y_hat_.shape[1]):
+        scores_.append(np.array([_RMSE(Y_[..., tsk], Y_hat_[..., tsk]),
+                                  _MAE(Y_[..., tsk], Y_hat_[..., tsk]),
+                                  _MBE(Y_[..., tsk], Y_hat_[..., tsk])])[..., np.newaxis])
+    scores_ = np.concatenate(scores_, axis = 1).T
+    return pd.DataFrame(scores_, columns = ['RMSE', 'MAE', 'MBE'],
+                                 index   = ['NP15', 'SP15', 'ZP26'][:Y_.shape[1]])
+
+# Baselines det. error metrics
+def _baseline_det_metrics(Y_, Y_hat_):
+    Y_p_     = []
+    Y_hat_p_ = []
+    for hrzn in range(Y_hat_.shape[2]):
+        Y_p_.append(Y_[..., hrzn])
+        Y_hat_p_.append(Y_hat_[..., hrzn])
+    Y_p_     = np.concatenate(Y_p_, axis = 0)
+    Y_hat_p_ = np.concatenate(Y_hat_p_, axis = 0)
+    return _sparse_det_metrics(Y_p_, Y_hat_p_)
 
 # Baselines det. error metrics
 def _baseline_det_metrics_dist(Y_, Y_hat_, model):

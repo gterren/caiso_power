@@ -60,7 +60,7 @@ resource  =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
 print(resource, sl_method, dl_method)
 # Define identification experiment key
 i_batch   = int(sys.argv[4])
-N_batches = 1
+N_batches = 2
 # Sparse learning model standardization
 x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
                         [[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
@@ -92,7 +92,7 @@ print(i_exps_, len(i_exps_), len(exp_), N_thetas)
 M_ = _load_spatial_masks(i_resources_, path_to_aux)
 
 # Load proposed data
-data_ = _load_data_in_chunks([2023], path_to_pds)
+data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -159,70 +159,83 @@ X_sl_ts_, Y_sl_ts_ = _sparse_learning_dataset_format(X_sl_ts_, Y_sl_ts_)
 # Find optimal parameters
 R_dl_ts_ = []
 
-i_exp = 0
-# Initialize constants
-theta_  = exp_[i_exp]
-thetas_ = [theta_, theta_, theta_]
-key     = r'{}-{}_{}{}-{}{}_{}'.format(sl_method, dl_method, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, theta_)
-print(i_job, i_exp, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, thetas_)
+for i_exp in i_exps_:
+    print(i_exp)
+    # Initialize constants
+    theta_  = exp_[i_exp]
+    thetas_ = [theta_, theta_, theta_]
+    key     = r'{}-{}_{}{}-{}{}_{}'.format(sl_method, dl_method, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, theta_)
+    print(i_job, i_exp, x_sl_stnd, y_sl_stnd, x_dl_stnd, y_dl_stnd, thetas_)
 
-# Standardize sparse learning dataset
-X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _sparse_learning_stand(X_sl_tr_, Y_sl_tr_, X_sl_ts_, x_sl_stnd, y_sl_stnd)
-#print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
+    # Standardize sparse learning dataset
+    X_sl_tr_stnd_, Y_sl_tr_stnd_, X_sl_ts_stnd_, sl_scaler_ = _sparse_learning_stand(X_sl_tr_, Y_sl_tr_, X_sl_ts_, x_sl_stnd, y_sl_stnd)
+    #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
 
-# Fit sparse learning model
-t_sl_tr              = time.time()
-W_hat_, Y_sl_ts_hat_ = _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd)
-t_sl_tr              = time.time() - t_sl_tr
+    # Fit sparse learning model
+    t_sl_tr  = time.time()
+    W_hat_, Y_sl_ts_hat_ = _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd)
+    t_sl_tr  = time.time() - t_sl_tr
+    #print(W_hat_.shape, Y_sl_ts_hat_.shape)
 
-# Standardize dense learning dataset
-X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_dl_stnd, y_dl_stnd)
-#print(X_dl_val_tr_.shape, Y_dl_val_tr_.shape, X_dl_val_ts_.shape)
+    # Standardize dense learning dataset
+    X_dl_tr_stnd_, Y_dl_tr_stnd_, X_dl_ts_stnd_, dl_scaler_ = _dense_learning_stand(X_dl_tr_, Y_dl_tr_, X_dl_ts_, x_dl_stnd, y_dl_stnd)
+    #print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
+
 
 # Fit multitask dense learning - Bayesian model chain
-t_dl_tr = time.time()
-models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key)
-t_dl_tr = time.time() - t_dl_tr
+models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL)
 
 # Make multitask probabilistic prediction
-t_ts                                      = time.time()
-M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
-t_ts                                      = time.time() - t_ts
+Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_ = _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
 
 # Make multitask joint probabilistic prediction
-t_prob_ts    = time.time()
-Y_dl_ts_hat_ = _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
-t_prob_ts    = time.time() - t_prob_ts
+Y_dl_ts_joint_hat_ = _multitask_joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
+                                                   thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
 
-print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
-# Testing scores
-E_dl_ts_  = _baseline_det_metrics(Y_dl_ts_, M_dl_ts_hat_)
-P_dl_ts_  = _prob_metrics(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
-MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, Y_dl_ts_hat_)
+    # Fit sense learning - Bayesian model chain
+    t_dl_tr = time.time()
+    models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key)
+    t_dl_tr = time.time() - t_dl_tr
 
-N_feaures_ = [(W_hat_[:, tsk] != 0.).sum() for tsk in range(W_hat_.shape[1])]
-N_feaures  = int(np.sum(N_feaures_))
-#print(N_feaures_,N_feaures )
+    # Independent prediction with conficence intervals
+    t_ts = time.time()
+    M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+    t_ts = time.time() - t_ts
+    #print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
 
-meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, N_feaures_, N_feaures, t_sl_tr, t_dl_tr, t_ts, t_prob_ts],
-                     index = ['experiment',
-                              'sparse_method',
-                              'x_sl_std',
-                              'y_sl_std',
-                              'dense_method',
-                              'x_dl_std',
-                              'y_dl_std',
-                              'parameters',
-                              'all_dimensions',
-                              'dimensions',
-                              'sparse_training_time',
-                              'dense_training_time',
-                              'testing_time',
-                              'prob_testing_time']).T
+    # Joint probabilistic predictions
+    t_prob_ts    = time.time()
+    Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 250)
+    t_prob_ts    = time.time() - t_prob_ts
 
-R_dl_ts_.append(pd.concat([meta_,
-                           _flatten_DataFrame(P_dl_ts_),
-                           _flatten_DataFrame(E_dl_ts_),
-                           _flatten_DataFrame(MV_dl_ts_)], axis = 1))
+    # Testing scores
+    E_dl_ts_  = _baseline_det_metrics(Y_dl_ts_, M_dl_ts_hat_)
+    P_dl_ts_  = _prob_metrics(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
+    MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, Y_dl_ts_hat_)
+
+    N_feaures_ = [(W_hat_[:, tsk] != 0.).sum() for tsk in range(W_hat_.shape[1])]
+    N_feaures  = int(np.sum(N_feaures_))
+    #print(N_feaures_,N_feaures )
+
+    meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, N_feaures_, N_feaures, t_sl_tr, t_dl_tr, t_ts, t_prob_ts],
+                         index = ['experiment',
+                                  'sparse_method',
+                                  'x_sl_std',
+                                  'y_sl_std',
+                                  'dense_method',
+                                  'x_dl_std',
+                                  'y_dl_std',
+                                  'parameters',
+                                  'all_dimensions',
+                                  'dimensions',
+                                  'sparse_training_time',
+                                  'dense_training_time',
+                                  'testing_time',
+                                  'prob_testing_time']).T
+
+    R_dl_ts_.append(pd.concat([meta_,
+                               _flatten_DataFrame(P_dl_ts_),
+                               _flatten_DataFrame(E_dl_ts_),
+                               _flatten_DataFrame(MV_dl_ts_)], axis = 1))
 
 _combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}.csv'.format(resource, sl_method, dl_method))

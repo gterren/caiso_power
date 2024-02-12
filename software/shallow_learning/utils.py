@@ -332,30 +332,35 @@ def _sparse_learning_predict(_SL, X_, g_):
 #
 #     return X_rc_, Y_[..., hrzn], g_rc_
 
-# Define Recursive dataset
-def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk = None):
-    # Find 0 coefficients obtained from sparse learning model
-    if tsk == None: idx_ = np.sum(W_hat_, axis = 1) != 0.
-    else:           idx_ = W_hat_[..., tsk] != 0.
-    if RC:
-        # Form recursive dataset and add feature sources indexes
-        if tsk == None: Y_hat_rc_ = np.concatenate([Y_hat_[..., tsk, :hrzn] for tsk in range(Y_hat_.shape[1])], axis = 1)
-        else:           Y_hat_rc_ = Y_hat_[..., tsk, :hrzn]
-        X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_], X_[:, W_hat_.shape[0]:, hrzn], Y_hat_rc_], axis = 1)
-        g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:], np.ones((Y_hat_rc_.shape[1],))*(np.unique(g_)[-1] + 1)], axis = 0)
-        #print(Y_.shape, Y_hat_rc_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
-    else:
-        X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_],
-                                X_[:, W_hat_.shape[0]:, hrzn]], axis = 1)
-        g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:]], axis = 0)
-        #print(Y_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
-    return X_rc_, Y_[..., hrzn], g_rc_
+# # Define Recursive dataset
+# def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk = None):
+#     # Find 0 coefficients obtained from sparse learning model
+#     if tsk == None:
+#         idx_ = np.sum(W_hat_, axis = 1) != 0.
+#     else:
+#         idx_ = W_hat_[..., tsk] != 0.
+#
+#     if RC:
+#         # Form recursive dataset and add feature sources indexes
+#         if tsk == None: Y_hat_rc_ = np.concatenate([Y_hat_[..., tsk, :hrzn] for tsk in range(Y_hat_.shape[1])], axis = 1)
+#         else:           Y_hat_rc_ = Y_hat_[..., tsk, :hrzn]
+#         X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_], X_[:, W_hat_.shape[0]:, hrzn], Y_hat_rc_], axis = 1)
+#         g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:], np.ones((Y_hat_rc_.shape[1],))*(np.unique(g_)[-1] + 1)], axis = 0)
+#         #print(Y_.shape, Y_hat_rc_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
+#     else:
+#         X_rc_ = np.concatenate([X_[:, :W_hat_.shape[0], hrzn][:, idx_],
+#                                 X_[:, W_hat_.shape[0]:, hrzn]], axis = 1)
+#         g_rc_ = np.concatenate([g_[:W_hat_.shape[0]][idx_], g_[W_hat_.shape[0]:]], axis = 0)
+#         #print(Y_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
+#     return X_rc_, Y_[..., hrzn], g_rc_
 
 # Define Recursive dataset
 def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk = None):
     # Find 0 coefficients obtained from sparse learning model
-    if tsk == None: idx_ = np.sum(W_hat_, axis = 1) != 0.
-    else:           idx_ = W_hat_[..., tsk] != 0.
+    if tsk == None:
+        idx_ = np.sum(W_hat_, axis = 1) != 0.
+    else:
+        idx_ = W_hat_[..., tsk] != 0.
     if RC:
         # Form recursive dataset and add feature sources indexes
         if tsk == None: Y_hat_rc_ = np.concatenate([Y_hat_[..., tsk, :hrzn] for tsk in range(Y_hat_.shape[1])], axis = 1)
@@ -579,36 +584,9 @@ def _dense_learning_recursive_prediction(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, t
         #print(Y_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
     return X_rc_, Y_[..., hrzn], g_rc_
 
-# # Save in the next row of a .csv file
-# def _save_val_in_csv_file(data_, meta_, assets_, path, name):
-#     file_name = r'{}{}-{}'.format(path, ''. join(str(e) for e in assets_), name)
-#     row_      = meta_ + data_.tolist()
-#     csv.writer(open(file_name, 'a')).writerow(row_)
-#
-# # Save in the next row of a .csv file
-# def _save_test_in_csv_file(data_, meta_, assets_, path, name):
-#     file_name = r'{}{}-{}'.format(path, ''. join(str(e) for e in assets_), name)
-#     row_      = meta_ + data_.tolist()
-#     csv.writer(open(file_name, 'a')).writerow(row_)
-#
-# # Save in the next row of a .csv file
-# def _save_baselines_in_csv_file(data_, i_resource, path, name):
-#     for i_asset in range(data_.shape[1]):
-#         file_name = r'{}{}{}-{}'.format(path, i_resource, i_asset, name)
-#         row_ = []
-#         for i_model in range(data_.shape[2]):
-#             row_ += data_[i_asset, :, i_model].tolist()
-#         csv.writer(open(file_name, 'a')).writerow(row_)
-#
-# # Save in the predictions in a .pkl file
-# def _save_pred_in_pkl_file(data_, key, i_resource, path, name):
-#     file_name = r'{}predictions/{}-{}{}'.format(path, i_resource[0], key, name)
-#     print(file_name)
-#     with open(file_name, 'wb') as _f:
-#         pickle.dump(data_, _f, protocol = pickle.HIGHEST_PROTOCOL)
-
 # Fit dense learning - Bayesian model chain
 def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
+    print('Dense learning model training...')
     # Initialization multi-task predictive mean
     Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
     models_      = []
@@ -644,6 +622,7 @@ def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, t
 
 # Fit sparse learning model
 def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd):
+    print('Sparse learning model training...')
     # Initialization prediction mean and weights
     W_hat_       = np.ones((X_sl_ts_stnd_[:, g_sl_ != g_sl_[-1]].shape[1], Y_sl_ts_.shape[1]))
     Y_sl_ts_hat_ = np.zeros(Y_sl_ts_.shape)
@@ -683,29 +662,30 @@ def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, 
     return W_hat_, Y_sl_ts_hat_
 
 # Fit multitask dense learning - Bayesian model chain
-def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL):
+def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
     # Initialization multi-task predictive mean
     Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
     models_      = []
     # Train an expert models for each hour
     for hrzn in range(Y_dl_tr_hat_.shape[2]):
+        tsk = 0
         # Define training and testing recursive dataset
         X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
         print(hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
         # Bayesian Linear Regression with Hyperprior
         if DL == 0: _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_)
         # Linear Relevance Vector Machine Regression with Hyperprior
-        if DL == 1: _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, threshold_lambda = thetas_[i_theta][-1])
+        if DL == 1: _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, threshold_lambda = thetas_[tsk][-1])
         # Gaussian Process for Regression with Hyperprior
-        if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, hrzn, xi = thetas_[i_theta][-1])
+        if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, hrzn, xi = thetas_[tsk][-1], key = key)
         # Multi-Task Gaussian Process for Regression with Hyperprior
-        if DL == 3: _DL = _MultiTaskGaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, xi = thetas_[i_theta][-1])
+        if DL == 3: _DL = _MultiTaskGaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, xi = thetas_[tsk][-1])
 
         if DL != 3:
             for tsk in range(Y_dl_tr_hat_.shape[1]):
                 Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL[tsk], X_dl_tr_rc_, DL)
         else:
-            Y_dl_tr_hat_[..., hrzn] = _dense_learning_predict_recursive(_DL, X_dl_tr_rc_, DL)
+            Y_dl_tr_hat_[..., hrzn], _ = _dense_learning_multitask_predict(_DL, X_dl_tr_rc_, DL)
         models_.append(_DL)
 
     return models_
@@ -761,27 +741,53 @@ def _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
 #     return Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_
 
 # Multitask predictive probabilistic distribution
-def _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd):
+def _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd):
     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-    S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape)
+    S2_dl_ts_hat_     = np.zeros(Y_dl_ts_.shape)
+    C_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+    #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
     # Train an expert models for each hour
     for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
         # Define training and testing recursive dataset
-        X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-        #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-        Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+        X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_                    = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
+        Y_dl_ts_stnd_hat_[..., hrzn], C_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
         # Undo standardization from dense learning multi-task prediction
         if y_dl_stnd == 1:
             # To undo predictive covariance necessary covariance instead of variance
             Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-            S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
-    return M_dl_ts_hat_, S2_dl_ts_hat_
+            C_dl_ts_hat_[..., hrzn] = Cov_*C_dl_ts_hat_[..., hrzn]
 
-# Make joint probabilistic predictions
+    for smpl in range(S2_dl_ts_hat_.shape[0]):
+        for tsk in range(S2_dl_ts_hat_.shape[-1]):
+            S2_dl_ts_hat_[smpl, :, tsk] = np.diag(C_dl_ts_hat_[smpl, ..., tsk])
+
+    return M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_
+
+# # Multitask predictive probabilistic distribution
+# def _multitask_pred_prob_dist_v0(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd):
+#     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
+#     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
+#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
+#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
+#     #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape)
+#     # Train an expert models for each hour
+#     for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
+#         # Define training and testing recursive dataset
+#         X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
+#         #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+#         Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+#         # Undo standardization from dense learning multi-task prediction
+#         if y_dl_stnd == 1:
+#             # To undo predictive covariance necessary covariance instead of variance
+#             Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
+#             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
+#             S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
+#     return M_dl_ts_hat_, S2_dl_ts_hat_
+
+# # Make joint probabilistic predictions
 # def _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
 #                         thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
 #     # Variable initialization
@@ -825,8 +831,7 @@ def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_,
             # Train an expert models for each hour
             for tsk in range(Y_dl_ts_hat_.shape[1]):
                 # Define training and testing recursive dataset
-                X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
-                #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+                X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_              = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
                 M_dl_ts_hat_[..., tsk], S2_dl_ts_hat_[..., tsk] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
             # Undo standardization from dense learning multi-task prediction
             if y_dl_stnd == 1:
@@ -841,7 +846,7 @@ def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_,
     return Y_dl_ts_hat_
 
 # Multitask joint prediction
-def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100):
     # Variable initialization
     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
@@ -852,8 +857,7 @@ def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_
         for hrzn in range(Y_dl_ts_hat_.shape[2]):
             # Define training and testing recursive dataset
             X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk = None)
-            #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-            M_dl_ts_hat_, S2_dl_ts_hat_ = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+            M_dl_ts_hat_, S2_dl_ts_hat_        = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
             # Undo standardization from dense learning multi-task prediction
             if y_dl_stnd == 1:
                 # To undo predictive covariance necessary covariance instead of variance
@@ -866,6 +870,33 @@ def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_
             if y_dl_stnd == 1:
                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
     return Y_dl_ts_hat_
+
+# # Multitask joint prediction
+# def _multitask_joint_prediction_v0(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
+#     # Variable initialization
+#     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
+#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
+#     #print(Y_dl_ts_stnd_hat_.shape, Y_dl_ts_hat_.shape)
+#     # Draw samples from predictive posterior
+#     for smpl in range(N_samples):
+#         # Train an expert models for each hour
+#         for hrzn in range(Y_dl_ts_hat_.shape[2]):
+#             # Define training and testing recursive dataset
+#             X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk = None)
+#             #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
+#             M_dl_ts_hat_, S2_dl_ts_hat_ = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+#             # Undo standardization from dense learning multi-task prediction
+#             if y_dl_stnd == 1:
+#                 # To undo predictive covariance necessary covariance instead of variance
+#                 Cov_          = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
+#                 M_dl_ts_hat_  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_)
+#                 S2_dl_ts_hat_ = Cov_*S2_dl_ts_hat_
+#             # Sample Predictive Posterior Distribution
+#             Y_dl_ts_hat_[..., hrzn, smpl] = _sample_multivariate_normal(M_dl_ts_hat_, S2_dl_ts_hat_)
+#             # Standardized predictors for recursive model
+#             if y_dl_stnd == 1:
+#                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
+#     return Y_dl_ts_hat_
 
 __all__ = ['_naive_forecasts',
            '_sparse_learning_predict',

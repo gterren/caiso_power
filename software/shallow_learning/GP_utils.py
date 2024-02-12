@@ -585,10 +585,11 @@ def _tcMTGPR_fit(X_, Y_, g_, params_):
 def _tcMTGPR_predict(_tcMTGPR, X_, return_cov = False):
     X_   = np.concatenate((X_, np.ones((X_.shape[0], 1))), axis = 1)
     X_p_ = torch.tensor(X_, dtype = torch.float)
+    # Make prediction
     Y_hat_, covariance_data_ = _tcMTGPR.predict(X_p_, conf_intervals = False,
                                                       compute_C_star = True)
     if return_cov:
-        S2_hat_ = covariance_data_['C_star']
+        S2_hat_           = covariance_data_['C_star']
         N_samples, N_tsks = Y_hat_.shape
         return Y_hat_, np.stack([S2_hat_[i*N_tsks:(i + 1)*N_tsks, i*N_tsks:(i + 1)*N_tsks] for i in range(N_samples)])
     else:
