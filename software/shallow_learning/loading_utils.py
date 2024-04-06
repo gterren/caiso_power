@@ -20,8 +20,11 @@ def _extrapolate_wind(M_10_, M_80_):
     M_120_ = __power_law(M_80_, 120., 80., alpha_)
     return M_60_, M_100_, M_120_
 
+# def _periodic(x_, period):
+#     return np.cos(2.*np.pi*x_/period)
+
 def _periodic(x_, period):
-    return np.cos(2.*np.pi*x_/period)
+    return 0.5 - (0.5*np.cos(2.*np.pi*x_/period))
 
 # Load data in a compressed file
 def _load_data_in_chunks(years_, path):
@@ -216,7 +219,7 @@ def _dense_learning_dataset(X_fc_, Y_ac_, Z_, G_, lag, AR = 0,
     X_ar_ = np.concatenate([X_ar_[i, ...] for i in range(X_ar_.shape[0])], axis = 0)
     X_ar_ = np.swapaxes(np.concatenate([X_ar_[np.newaxis, ...] for _ in range(X_cs_.shape[0])], axis = 0), -1, -2)
     X_cs_ = np.swapaxes(np.concatenate([X_cs_[:, i, ...] for i in range(X_cs_.shape[1])], axis = 1), -1, -2)
-    #print(X_ar_.shape, X_cs_.shape)
+    print(X_ar_.shape, X_cs_.shape)
     # Adjust timestamps signal and covariates
     X_dl_ = X_fc_[:, lag + 1:, :]
     Z_dl_ = Z_[:, lag + 1:, ...]
@@ -225,9 +228,9 @@ def _dense_learning_dataset(X_fc_, Y_ac_, Z_, G_, lag, AR = 0,
     g_ar_ = np.ones((X_ar_.shape[-1],))*(np.unique(G_)[-1] + 1)
     g_cs_ = np.ones((X_cs_.shape[-1],))*(np.unique(G_)[-1] + 2)
     g_tm_ = np.ones((Z_dl_.shape[-1],))*(np.unique(G_)[-1] + 3)
-    print(g_ar_)
-    print(g_cs_)
-    print(g_tm_)
+    # print(g_ar_.shape)
+    # print(g_cs_.shape)
+    # print(g_tm_.shape)
     #print(G_.shape, g_ar_.shape, g_cs_.shape, g_dl_.shape, G_dl_.shape)
     # Form covariate vector for dense learning
     Y_dl_ = np.swapaxes(np.swapaxes(Y_ac_[:, lag + 1:, ...], 0, 1), -2, -1)
@@ -316,6 +319,17 @@ def _generate_dataset(X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, 
     with open(path + dataset, 'wb') as _file:
         pickle.dump(processed_, _file, protocol = pickle.HIGHEST_PROTOCOL)
 
+def _save_baseline_fc(Y_per_fc_ts_, Y_ca_fc_ts_, Y_clm_fc_ts_, dataset, path):
+    print('Saving baseline forecasts...')
+
+    processed_                = {}
+    processed_['persistence'] = Y_per_fc_ts_
+    processed_['climatology'] = Y_clm_fc_ts_
+    processed_['caiso']       = Y_ca_fc_ts_
+
+    with open(path + dataset, 'wb') as _file:
+        pickle.dump(processed_, _file, protocol = pickle.HIGHEST_PROTOCOL)
+
 def _load_processed_dataset(dataset, path):
     print('Loading dataset...')
 
@@ -339,6 +353,7 @@ def _load_processed_dataset(dataset, path):
 
 __all__ = ['_load_data_in_chunks',
            '_generate_dataset',
+           '_save_baseline_fc',
            '_load_processed_dataset',
            '_load_spatial_masks',
            '_multisource_structure_dataset',

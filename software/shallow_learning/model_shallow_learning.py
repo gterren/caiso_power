@@ -50,19 +50,27 @@ TM = 1
 # Recursive forecast in covariates
 RC = 1
 
-key = 'ES'
+# key = 'ES'
 
-SL           = 1
-DL           = 2
-i_resources_ = [2]
-sl_method    = sl_methods_[SL]
-dl_method    = dl_methods_[DL]
+# R  = int(sys.argv[1])
+# SL = int(sys.argv[2])
+# DL = int(sys.argv[3])
+# i_resources_ = [R]
+# sl_method    = sl_methods_[SL]
+# dl_method    = dl_methods_[DL]
+
+results_ = pd.read_csv(path_to_mdl + 'prob_model_selection.csv')
+print(results_)
+
+exit()
+
 
 theta_1_ = (160,7)
 theta_2_ = (160,7)
 theta_3_ = (160,0)
 thetas_  = [theta_1_, theta_2_, theta_3_]
 print(thetas_)
+
 
 # Generate input and output file names
 resource =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
@@ -198,8 +206,6 @@ _model['samples']    = Y_dl_ts_hat_
 _model['climatology'] = Y_clm_fc_ts_
 _model['caiso']       = Y_ca_fc_ts_
 _model['persitence']  = Y_per_fc_ts_
-
-
 
 #_save_dict(_model, path_to_mdl, file_name = '{}-{}-{}-{}.pkl'.format(resource, sl_method, dl_method, key))
 

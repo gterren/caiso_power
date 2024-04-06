@@ -41,15 +41,15 @@ TM = 1
 # Recursive forecast in covariates
 RC = 1
 
-i_resources_ = [0]
+i_resources_ = [2]
 resource     =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
-dataset      =  '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}.pkl'.format(i_mask)
+dataset      =  '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}_v2.pkl'.format(i_mask)
 
 # Loading spatial masks
 M_ = _load_spatial_masks(i_resources_, path_to_aux)
 
 # Load proposed data
-data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_raw)
+data_ = _load_data_in_chunks([2019], path_to_raw)
 #print(len(data_))
 
 # Define data structure for a given experiment
@@ -66,7 +66,21 @@ X_sl_, Y_sl_, g_sl_ = _dense_learning_dataset(X_ac_, Y_ac_, Z_, g_sl_, N_lags, A
 # Generate dense learning dataset
 X_dl_, Y_dl_, g_dl_ = _dense_learning_dataset(X_fc_, Y_ac_, Z_, g_dl_, N_lags, AR, CS, TM)
 #print(X_dl_.shape, Y_dl_.shape, g_dl_.shape)
-del X_ac_, X_fc_
 
-_generate_dataset(X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_, dataset, path_to_prc)
+exit()
+#_generate_dataset(X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_, dataset, path_to_prc)
 
+# Naive and CAISO forecasts as baselines
+Y_per_fc_, Y_ca_fc_, Y_clm_fc_ = _naive_forecasts(Y_ac_, Y_fc_, N_lags)
+#print(Y_per_fc_.shape, Y_ca_fc_.shape, Y_clm_fc_.shape)
+del Y_ac_, Y_fc_
+
+# Split data in training and testing
+Y_per_fc_tr_, Y_per_fc_ts_ = _training_and_testing_dataset(Y_per_fc_)
+Y_ca_fc_tr_, Y_ca_fc_ts_   = _training_and_testing_dataset(Y_ca_fc_)
+Y_clm_fc_tr_, Y_clm_fc_ts_ = _training_and_testing_dataset(Y_clm_fc_)
+print(Y_per_fc_ts_.shape, Y_ca_fc_ts_.shape, Y_clm_fc_ts_.shape)
+
+dataset = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_baselines_v2.pkl'
+
+#_save_baseline_fc(Y_per_fc_ts_, Y_ca_fc_ts_, Y_clm_fc_ts_, dataset, path_to_prc)

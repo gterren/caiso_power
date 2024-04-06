@@ -54,10 +54,10 @@ TM = 1
 RC = 1
 
 # Define identification experiment key
-i_batch   = int(sys.argv[1])
-N_batches = 2
+i_batch   = 0
+N_batches = 1
 
-filename = "score_independet_selection.csv"
+filename = "prob_model_selection.csv"
 exps_    = pd.read_csv(path_to_mdl + filename)
 idx_exp_ = exps_.index.values
 
@@ -68,8 +68,8 @@ print(exps_.loc[i_exps_])
 for i_exp in i_exps_:
 
     score     = exps_.loc[i_exp, "score"]
-    sl_method = exps_.loc[i_exp, "sparse_learning"]
-    dl_method = exps_.loc[i_exp, "dense_learning"]
+    sl_method = exps_.loc[i_exp, "sparse_method"]
+    dl_method = exps_.loc[i_exp, "dense_method"]
     SL        = sl_methods_.index(sl_method)
     DL        = dl_methods_.index(dl_method)
     print(sl_method, dl_method, SL, DL)
@@ -95,44 +95,29 @@ for i_exp in i_exps_:
     # Loading spatial masks
     M_ = _load_spatial_masks(i_resources_, path_to_aux)
 
-    # Load proposed data
-    data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
-    #print(len(data_))
-
-    # Define data structure for a given experiment
-    Y_ac_, Y_fc_, X_ac_, X_fc_, Z_, ZZ_, g_sl_, g_dl_, assets_ = _multisource_structure_dataset(data_, i_resources_, i_assets_, M_[i_mask], tau)
-    #print(Y_ac_.shape, Y_fc_.shape, X_ac_.shape, X_fc_.shape, Z_.shape, g_sl_.shape, g_dl_.shape)
-    del data_
-
-    # Generate sparse learning dataset
-    X_sl_, Y_sl_, g_sl_ = _dense_learning_dataset(X_ac_, Y_ac_, Z_, g_sl_, N_lags, AR = 0,
-                                                                                   CS = 0,
-                                                                                   TM = 1)
-    #print(X_sl_.shape, Y_sl_.shape, g_sl_.shape)
+    # Loading preprocessed (filtered) dataset
+    X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_ = _load_processed_dataset(dataset, path_to_prc)
 
     # Split data in training and testing
     X_sl_tr_, X_sl_ts_ = _training_and_testing_dataset(X_sl_)
     Y_sl_tr_, Y_sl_ts_ = _training_and_testing_dataset(Y_sl_)
     #print(X_sl_tr_.shape, Y_sl_tr_.shape, X_sl_ts_.shape, Y_sl_ts_.shape)
-    del X_ac_, X_sl_, Y_sl_
-
-    # Generate dense learning dataset
-    X_dl_, Y_dl_, g_dl_ = _dense_learning_dataset(X_fc_, Y_ac_, Z_, g_dl_, N_lags, AR, CS, TM)
-    #print(X_dl_.shape, Y_dl_.shape, g_dl_.shape)
+    del X_sl_, Y_sl_
 
     # Split data in training and testing
     X_dl_tr_, X_dl_ts_ = _training_and_testing_dataset(X_dl_)
     Y_dl_tr_, Y_dl_ts_ = _training_and_testing_dataset(Y_dl_)
     #print(X_dl_tr_.shape, Y_dl_tr_.shape, X_dl_ts_.shape, Y_dl_ts_.shape)
+    del X_dl_, Y_dl_
 
     meta_ts_ = pd.DataFrame(ZZ_[0, -Y_dl_ts_.shape[0]:, [0, 1, 2, 3]].T, columns = ['year', 'month', 'day', 'yearday'])
+    del Z_, ZZ_
 
-    del X_fc_, X_dl_, Y_dl_, Z_, ZZ_
     # Naive and CAISO forecasts as baselines
     Y_per_fc_, Y_ca_fc_, Y_clm_fc_ = _naive_forecasts(Y_ac_, Y_fc_, N_lags)
     #print(Y_per_fc_.shape, Y_ca_fc_.shape, Y_clm_fc_.shape)
     del Y_ac_, Y_fc_
-
+    exit()
     # Split data in training and testing
     Y_per_fc_tr_, Y_per_fc_ts_ = _training_and_testing_dataset(Y_per_fc_)
     Y_ca_fc_tr_, Y_ca_fc_ts_   = _training_and_testing_dataset(Y_ca_fc_)

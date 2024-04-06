@@ -14,10 +14,9 @@ from loading_utils import *
 i_job, N_jobs, comm = _get_node_info()
 
 # Degine path to data
-path_to_pds = r"/home/gterren/caiso_power/data/dataset-2023/"
+path_to_prc = r"/home/gterren/caiso_power/data/processed/"
 path_to_aux = r"/home/gterren/caiso_power/data/auxiliary/"
-path_to_rst = r"/home/gterren/caiso_power/results/GPR/"
-path_to_img = r"/home/gterren/caiso_power/images/"
+path_to_rst = r"/home/gterren/caiso_power/results/"
 
 # Notes:
 # SL = 0: X = {0, 1}, Y = {0}
@@ -53,17 +52,25 @@ CS = 1
 TM = 1
 # Recursive forecast in covariates
 RC = 1
+
 # Sparse learning model index
 SL = int(sys.argv[2])
 DL = int(sys.argv[3])
 sl_method = sl_methods_[SL]
 dl_method = dl_methods_[DL]
-resource  =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
+print(sl_method, dl_method)
+
+# Generate input and output file names
+resource =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
+dataset  =  '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}_periodic.pkl'.format(i_mask)
+print(resource, dataset)
+
 # Define identification experiment key
 i_batch   = int(sys.argv[4])
-N_batches = 4
-N_kfolds  = 3
-print(resource, sl_method, dl_method, i_batch)
+N_batches = 1
+N_kfolds  = 5
+print(i_job, N_jobs, i_batch, N_batches)
+
 # Sparse learning model standardization
 x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
                         [[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
@@ -72,58 +79,45 @@ x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
                         [0, 0]][SL]
 # Dense learning model standardization
 x_dl_stnd, y_dl_stnd = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]][DL]
+
 # Sparse and dense learning hyper-parameters
-alphas_  = [0.00001, 0.001, 0.01, 0.1, 1., 10.]
-betas_   = [10, 20, 40, 80, 160, 320]
-omegas_  = [0.01, 0.25, 0.5, 0.75]
-gammas_  = [0.1, 1., 10.]
-etas_    = [0.25, 0.5, 0.75, 1.]
-lambdas_ = [1., 10., 100., 1000.]
-#xis_     = [0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
-xis_     = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
+alphas_ = [5e-4, 1e-4, 5e-3, 1e-3, 1e-2, 5e-2, 1e-1]
+nus_    = [1e-4, 1e-3, 1e-2, 1e-1, 1.]
+betas_  = [10, 20, 40, 80, 160, 320, 640]
+omegas_ = [0.01, 0.25, 0.5, 0.75]
+if R == 0: gammas_ = [0.1, 1., 10.]
+if R == 1: gammas_ = [1., 10., 100.]
+if R == 2: gammas_ = [0.01, 0.1, 1.]
+etas_     = [0.25, 0.5, 0.75, 1.]
+lambdas_  = [1., 10., 100., 1000.]
+xis_      = [0, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
 kappas_1_ = [25, 50, 100, 200]
 kappas_2_ = [0.1, 0.05]
 kappas_3_ = [.4, .5, .6]
 kappas_4_ = [.1, .2, .3, .4, .5]
 kappas_   = [kappas_1_, kappas_2_, kappas_3_, kappas_4_]
 # Get combination of possible parameters
-exp_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, SL, DL)
+exp_, N_thetas = _get_cv_param(alphas_, nus_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, SL, DL)
 i_exps_        = _experiments_index_batch_job(exp_, i_batch, N_batches, i_job, N_jobs)
-print(i_exps_, len(i_exps_))
+print(i_exps_, len(i_exps_), len(exp_), N_thetas, i_job, N_jobs)
 
 # Loading spatial masks
 M_ = _load_spatial_masks(i_resources_, path_to_aux)
 
-# Load proposed data
-data_ = _load_data_in_chunks([2019, 2020, 2021, 2022, 2023], path_to_pds)
-#data_ = _load_data_in_chunks([2023], path_to_pds)
-#print(len(data_))
+# Loading preprocessed (filtered) dataset
+X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_ = _load_processed_dataset(dataset, path_to_prc)
 
-# Define data structure for a given experiment
-Y_ac_, Y_fc_, X_ac_, X_fc_, Z_, ZZ_, g_sl_, g_dl_, assets_ = _multisource_structure_dataset(data_, i_resources_, i_assets_, M_[i_mask], tau)
-#print(Y_ac_.shape, Y_fc_.shape, X_ac_.shape, X_fc_.shape, Z_.shape, g_sl_.shape, g_dl_.shape)
-del data_
-
-# Generate sparse learning dataset
-X_sl_, Y_sl_, g_sl_ = _dense_learning_dataset(X_ac_, Y_ac_, Z_, g_sl_, N_lags, AR = 0,
-                                                                               CS = 0,
-                                                                               TM = 1)
-#print(X_sl_.shape, Y_sl_.shape, g_sl_.shape)
 # Split data in training and testing
 X_sl_tr_, X_sl_ts_ = _training_and_testing_dataset(X_sl_)
 Y_sl_tr_, Y_sl_ts_ = _training_and_testing_dataset(Y_sl_)
 #print(X_sl_tr_.shape, Y_sl_tr_.shape, X_sl_ts_.shape, Y_sl_ts_.shape)
-del X_ac_, X_sl_, Y_sl_
-
-# Generate dense learning dataset
-X_dl_, Y_dl_, g_dl_ = _dense_learning_dataset(X_fc_, Y_ac_, Z_, g_dl_, N_lags, AR, CS, TM)
-#print(X_dl_.shape, Y_dl_.shape, g_dl_.shape)
+del X_sl_, Y_sl_
 
 # Split data in training and testing
 X_dl_tr_, X_dl_ts_ = _training_and_testing_dataset(X_dl_)
 Y_dl_tr_, Y_dl_ts_ = _training_and_testing_dataset(Y_dl_)
 #print(X_dl_tr_.shape, Y_dl_tr_.shape, X_dl_ts_.shape, Y_dl_ts_.shape)
-del X_fc_, X_dl_, Y_dl_, Z_, ZZ_
+del X_dl_, Y_dl_
 
 # Naive and CAISO forecasts as baselines
 Y_per_fc_, Y_ca_fc_, Y_clm_fc_ = _naive_forecasts(Y_ac_, Y_fc_, N_lags)
@@ -168,7 +162,7 @@ for i_exp in i_exps_:
     #E_sl_val_ts_  = np.zeros((N_kfolds, 3, 3))
     E_dl_val_ts_  = np.zeros((N_kfolds, N_tasks, 3))
     P_dl_val_ts_  = np.zeros((N_kfolds, N_tasks, 3))
-    MV_dl_val_ts_ = np.zeros((N_kfolds, 5))
+    MV_dl_val_ts_ = np.zeros((N_kfolds, 19))
     # Loop over validation k-folds
     for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                                   random_state = None,
@@ -200,30 +194,40 @@ for i_exp in i_exps_:
         #print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
 
         # Fit sense learning - Bayesian model chain
-        models_ = _fit_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, RC, DL)
+        if DL != 3:
+            models_ = _fit_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, RC, DL)
+        else:
+            models_ = _fit_multitask_dense_learning(X_dl_val_tr_stnd_, Y_dl_val_tr_stnd_, Y_dl_val_tr_, W_hat_, g_dl_, thetas_, RC, DL)
 
         # Independent prediction with conficence intervals
-        M_dl_val_ts_hat_, S2_dl_val_ts_hat_, C_dl_val_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+        if DL != 3:
+            M_dl_val_ts_hat_, S2_dl_val_ts_hat_, C_dl_val_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+        else:
+            M_dl_val_ts_hat_, S2_dl_val_ts_hat_, C_dl_val_ts_hat_ = _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
         #print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
-        E_dl_val_ts_[i_fold, ...]  = _baseline_det_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_).to_numpy()
+        
         # Joint probabilistic predictions
-        Y_dl_val_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 250)
+        if DL != 3:
+            Y_dl_val_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
+        else:
+            Y_dl_val_ts_hat_ = _multitask_joint_prediction(models_, dl_scaler_, X_dl_val_ts_stnd_, Y_dl_val_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
         #print(Y_dl_ts_.shape, Y_dl_ts_hat_.shape)
 
+        # Validation scores
+        E_dl_val_ts_[i_fold, ...] = _baseline_det_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_).to_numpy()
         P_dl_val_ts_[i_fold, ...] = _prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
-        MV_dl_val_ts_[i_fold, :]  = _multivariate_prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, C_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
+
+        if R == 1:
+            Y_dl_val_ts_p_           = Y_dl_val_ts_[..., 4:-4]
+            M_dl_val_ts_hat_p_       = M_dl_val_ts_hat_[..., 4:-4]
+            C_dl_val_ts_hat_p_       = C_dl_val_ts_hat_[..., 4:-4]
+            S2_dl_val_ts_hat_p_      = S2_dl_val_ts_hat_[..., 4:-4]
+            Y_dl_val_ts_hat_p_       = Y_dl_val_ts_hat_[..., 4:-4, :]
+            MV_dl_val_ts_[i_fold, :] = _multivariate_prob_metrics(Y_dl_val_ts_p_, M_dl_val_ts_hat_p_, C_dl_val_ts_hat_p_, S2_dl_val_ts_hat_p_, Y_dl_val_ts_hat_p_).to_numpy()
+        else:
+            MV_dl_val_ts_[i_fold, :] = _multivariate_prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, C_dl_val_ts_hat_, S2_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
+
         i_fold += 1
-
-    # #meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, theta_, time.time() - t_init], index = ['experiment', 'sparse_method', 'x_std', 'y_std', 'parameters', 'time']).T
-    # meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, time.time() - t_init],
-    #                      index = ['experiment', 'sparse_method', 'sparse_x_std', 'sparse_y_std', 'dense_method', 'dense_x_std', 'dense_y_std', 'parameters', 'time']).T
-    #
-    # #R_sl_val_ts_.append(pd.concat([meta_, _flatten_DataFrame(E_sl_val_ts_)], axis = 1))
-    # R_dl_val_ts_.append(pd.concat([meta_, _flatten_DataFrame(P_dl_val_ts_), _flatten_DataFrame(E_dl_val_ts_), _flatten_DataFrame(MV_dl_val_ts_)], axis = 1))
-
-    # E_dl_val_ts_  = np.mean(E_dl_val_ts_, axis = 0)
-    # P_dl_val_ts_  = np.mean(P_dl_val_ts_, axis = 0)
-    # MV_dl_val_ts_ = np.mean(MV_dl_val_ts_, axis = 0)
 
     E_dl_val_ts_  = pd.DataFrame(np.mean(E_dl_val_ts_, axis = 0), columns = ['RMSE', 'MAE', 'MBE'],
                                                                   index   = ['NP15', 'SP15', 'ZP26'][:N_tasks])
@@ -232,9 +236,20 @@ for i_exp in i_exps_:
                                                                   index   = ['NP15', 'SP15', 'ZP26'][:N_tasks])
     
     MV_dl_val_ts_ = pd.DataFrame(np.mean(MV_dl_val_ts_, axis = 0), columns = [''],
-                                                                   index   = ['IS', 'ES', 'VS', 'VS_temporal', 'sample_IS']).T
+                                                                   index   = ['AggLogS', 'sAggLogS',
+                                                                              'ES_spatial', 'VS_spatial', 'ES_temporal', 'VS_temporal',
+                                                                              'LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
 
-    meta_     = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, time.time() - t_init], index = ['experiment', 'sparse_method', 'x_std', 'y_std', 'dense_method', 'x_std', 'y_std', 'parameters', 'time']).T
+    meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, theta_, time.time() - t_init], index = ['experiment',
+                                                                                                                             'sparse_method',
+                                                                                                                             'x_std',
+                                                                                                                             'y_std',
+                                                                                                                             'dense_method',
+                                                                                                                             'x_std',
+                                                                                                                             'y_std',
+                                                                                                                             'parameters',
+                                                                                                                             'time']).T
+    
     R_dl_val_ts_.append(pd.concat([meta_, _flatten_DataFrame(P_dl_val_ts_), _flatten_DataFrame(E_dl_val_ts_), _flatten_DataFrame(MV_dl_val_ts_)], axis = 1))
 
 _combine_parallel_results(comm, pd.concat(R_dl_val_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'val-{}-{}-{}.csv'.format(resource, sl_method, dl_method))
