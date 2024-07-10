@@ -10,8 +10,7 @@ from aux_utils import *
 
 # MPI job variables
 i_job, N_jobs, comm = _get_node_info()
-#i_job  = 0
-#N_jobs = 1
+
 # Degine path to data
 path_to_prc = r"/home/gterren/caiso_power/data/processed/"
 path_to_aux = r"/home/gterren/caiso_power/data/auxiliary/"
@@ -32,11 +31,11 @@ dl_methods_ = ['BLR', 'RVM', 'GPR', 'MTGPR', 'NGR']
 sl_methods_ = ['lasso', 'OMP', 'elastic_net', 'group_lasso', 'dense']
 resources_  = ['load', 'solar', 'wind']
 
-R = int(sys.argv[1])
+i_resources = int(sys.argv[1])
 # Assets in resources: {load:5, solar:3, wind:2}
-i_resources_ = [R]
+i_resources_ = [[0, 1, 2], [0, 1, 2], [0, 1]][i_resources]
 # Resources: [{MWD, PGE, SCE, SDGE, VEA}, {NP, SP, ZP}, {NP, SP}]
-i_assets_ = [[1, 2, 3], [0, 1, 2], [0, 1]]
+i_assets_    = [[[1], [0], [0]], [[2], [1], [1]], [[3], [2]]][i_resources]
 
 # Spatial masks {All, US Land, All CAISO Resources density, Resource density}
 i_mask = 3
@@ -60,9 +59,11 @@ dl_method = dl_methods_[DL]
 print(sl_method, dl_method)
 
 # Generate input and output file names
-resource =  '_'.join([resources_[i_resource] for i_resource in i_resources_])
-dataset  =  '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}.pkl'.format(i_mask)
-print(resource, dataset)
+resource  = '_'.join([resources_[i_resource] for i_resource in i_resources_])
+dataset   = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}.pkl'.format(i_mask)
+file_name = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_])
+file_name = 'test-{}-{}-{}.csv'.format(file_name, sl_method, dl_method)
+print(resource, dataset, file_name)
 
 # Define identification experiment key
 i_exp = int(sys.argv[4])
@@ -76,16 +77,14 @@ x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
 # Dense learning model standardization
 x_dl_stnd, y_dl_stnd = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]][DL]
 # Sparse and dense learning hyper-parameters
-alphas_ = [5e-4, 1e-4, 5e-3, 1e-3, 1e-2, 5e-2, 1e-1]
-nus_    = [1e-4, 1e-3, 1e-2, 1e-1, 1.]
-betas_  = [10, 20, 40, 80, 160, 320, 640]
-omegas_ = [0.01, 0.25, 0.5, 0.75]
-if R == 0: gammas_ = [0.1, 1., 10.]
-if R == 1: gammas_ = [1., 10., 100.]
-if R == 2: gammas_ = [0.01, 0.1, 1.]
-etas_     = [0.25, 0.5, 0.75, 1.]
+alphas_ = [1e-3, 3e-3, 6e-3, 9e-3, 2e-2, 5e-2, 9e-2, 2e-1]
+betas_  = [10, 20, 40, 80, 160, 320, 640, 1280]
+nus_    = [1e-3, 1e-2, 1e-1]
+omegas_ = [.125, .25, .375, .5, .625, .75, .875]
+gammas_ = [1., 5., 10.]
+etas_   = [.125, .25, .375, .5, .625, .75, .875]
 lambdas_  = [1., 10., 100., 1000.]
-xis_      = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
+xis_      = [0, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
 kappas_1_ = [25, 50, 100, 200]
 kappas_2_ = [0.1, 0.05]
 kappas_3_ = [.4, .5, .6]
@@ -208,15 +207,13 @@ t_prob_ts = time.time() - t_prob_ts
 # Testing scores
 E_dl_ts_  = _baseline_det_metrics(Y_dl_ts_, M_dl_ts_hat_)
 P_dl_ts_  = _prob_metrics(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
-if R == 1:
-    Y_dl_ts_p_      = Y_dl_ts_[..., 4:-4]
-    M_dl_ts_hat_p_  = M_dl_ts_hat_[..., 4:-4]
-    C_dl_ts_hat_p_  = C_dl_ts_hat_[..., 4:-4]
-    S2_dl_ts_hat_p_ = S2_dl_ts_hat_[..., 4:-4]
-    Y_dl_ts_hat_p_  = Y_dl_ts_hat_[..., 4:-4, :]
-    MV_dl_ts_       = _multivariate_prob_metrics(Y_dl_ts_p_, M_dl_ts_hat_p_, C_dl_ts_hat_p_, S2_dl_ts_hat_p_, Y_dl_ts_hat_p_)
-else:
-    MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
+
+Y_dl_ts_p_      = Y_dl_ts_[..., 4:-4]
+M_dl_ts_hat_p_  = M_dl_ts_hat_[..., 4:-4]
+C_dl_ts_hat_p_  = C_dl_ts_hat_[..., 4:-4]
+S2_dl_ts_hat_p_ = S2_dl_ts_hat_[..., 4:-4]
+Y_dl_ts_hat_p_  = Y_dl_ts_hat_[..., 4:-4, :]
+MV_dl_ts_       = _multivariate_prob_metrics(Y_dl_ts_p_, M_dl_ts_hat_p_, C_dl_ts_hat_p_, S2_dl_ts_hat_p_, Y_dl_ts_hat_p_)
 
 N_feaures_ = [(W_hat_[:, tsk] != 0.).sum() for tsk in range(W_hat_.shape[1])]
 N_feaures  = int(np.sum(N_feaures_))
@@ -242,4 +239,5 @@ R_dl_ts_.append(pd.concat([meta_,
                            _flatten_DataFrame(P_dl_ts_),
                            _flatten_DataFrame(E_dl_ts_),
                            _flatten_DataFrame(MV_dl_ts_)], axis = 1))
-_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}.csv'.format(resource, sl_method, dl_method))
+
+_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name)

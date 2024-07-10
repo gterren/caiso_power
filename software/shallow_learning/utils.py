@@ -6,7 +6,7 @@ from time import sleep
 from datetime import datetime, date, timedelta
 from itertools import product, chain
 from group_lasso import GroupLasso
-from scipy.stats import norm, multivariate_normal
+#from scipy.stats import norm, multivariate_normal
 import properscoring as ps
 
 from sklearn.preprocessing import StandardScaler
@@ -20,6 +20,7 @@ from GP_utils import *
 from ngboost import NGBRegressor
 from ngboost.scores import LogScore, CRPScore
 from ngboost.distns import Normal, MultivariateNormal
+from scipy.stats import norm, multivariate_normal
 
 # # Load data in a compressed file
 # def _load_data_in_chunks(years_, path):
@@ -407,18 +408,6 @@ def _get_cv_param(alphas_, nus_, betas_, omegas_, gammas_, etas_, lambdas_, xis_
 
     return list(product(*thetas_)), len(list(product(*thetas_)))
 
-# # Parallelize experiment combinations
-# def _split_experiments_into_jobs_per_batches(exps_, i_batch, N_batches, i_job, N_jobs):
-#     exps_batch_ = np.linspace(0, len(exps_) - 1, len(exps_), dtype = int)[i_batch::N_batches]
-#     return [exps_batch_[i_job::N_jobs] for i_job in range(N_jobs)]
-
-# # Save in the next row of a .csv file
-# def _save_val_in_csv_file(data_, meta_, i_resource, path, name):
-#     for i_asset in range(data_.shape[0]):
-#         file_name = r'{}{}{}-{}'.format(path, i_resource, i_asset, name)
-#         row_      = meta_ + data_[i_asset, :].tolist()
-#         csv.writer(open(file_name, 'a')).writerow(row_)
-
 # Natural Gradiente Boosting for Regression
 def _NaturalGradientBoostingRegression(X_, Y_, g_, n_estimators   = 100,
                                                    minibatch_frac = 0.5,
@@ -449,19 +438,6 @@ def _RelevanceVectorMachine(X_, Y_, g_, threshold_lambda, max_iter = 1000):
     return [ARDRegression(threshold_lambda = threshold_lambda,
                           n_iter           = max_iter,
                           tol              = 0.001).fit(X_, Y_[:, i_tsk]) for i_tsk in range(Y_.shape[-1])]
-
-# def GaussianProcess(X_, y_, g_, xi, RC, hrzn, max_iter   = 1000,
-#                                               n_init     = 9,
-#                                               early_stop = 10,
-#                                               GP         = 'GPytorch'):
-#     print(X_, y_.shape)
-#     # Model hyperparameter configurations
-#     kernels_ = ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ', 'PW', 'PW', 'PW', 'PW']
-#     degrees_ = [0., 0., 2., 3., 1./2., 3./2., 5./2., 0., 0, 1, 2, 3]
-#     params_  = [kernels_[xi], degrees_[xi], RC, hrzn, max_iter, n_init, early_stop]
-#
-#     if GP == 'GPytorch': return _GPR_fit(X_, y_, g_, params_)
-#     if GP == 'sklearn':  return _skGPR_fit(X_, y_, g_, params_)
 
 # Gassuain Process for Regression
 def _GaussianProcess(X_, Y_, g_, hrzn, xi, max_iter   = 250,
@@ -528,25 +504,44 @@ def _dense_learning_multitask_predict(models_, X_, DL):
                 Y_hat_[:, i_mdl], S2_hat_[:, i_mdl, i_mdl] = _GPR_predict(models_[i_mdl], X_, return_var = True)
     return Y_hat_, S2_hat_
 
+# Robust multivariate normal distribution sample generation
+def _robust_sampling_from_multivariate_normal_v1(m_hat_, C_hat_, N_scenarios):
+    try:
+        I_ = np.linalg.pinv(C_hat_)
+    except:
+        print('Adding jitter...')
+        epsilon = np.min(np.real(np.linalg.eigvals(C_hat_)))
+        C_hat_ -= 10*epsilon * np.eye(C_hat_.shape[0])
+    return np.random.multivariate_normal(m_hat_, C_hat_, N_scenarios, check_valid = "ignore")
+
+# Robust multivariate normal distribution sample generation
+def _robust_sampling_from_multivariate_normal_v2(m_hat_, C_hat_, N_scenarios):
+    try:
+        return multivariate_normal(m_hat_, C_hat_, allow_singular = True).rvs(N_scenarios).T
+    except:
+        print('Adding jitter...')
+        epsilon = np.min(np.real(np.linalg.eigvals(C_hat_)))
+        return multivariate_normal(m_hat_, C_hat_ - 10*epsilon * np.eye(C_hat_.shape[0]),
+                                   allow_singular = True).rvs(N_scenarios).T
+
 # Draw random samples from a multivariate normal distribution
-def _sample_multivariate_normal(Y_hat_, S2_hat_, N_samples = 1):
-    if N_samples == 1: Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1]))
-    else:              Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1], N_samples))
-    for i in range(Y_hat_.shape[0]):
-        min_eig = np.min(np.real(np.linalg.eigvals(S2_hat_[i, :])))
-        if min_eig < 0:
-            print('adding jitter')
-            S2_hat_[i, :] -= 10*min_eig * np.eye(S2_hat_[i, :].shape)
-        Z_[i, ...] = multivariate_normal(Y_hat_[i, :], S2_hat_[i, :], allow_singular = True).rvs(N_samples).T
+def _sample_multivariate_normal(m_hat_, C_hat_, N_scenarios = 1):
+    # Constant definition
+    N_samples = m_hat_.shape[0]
+    N_tasks   = m_hat_.shape[1]
+    if N_scenarios == 1: Z_ = np.zeros((N_samples, N_tasks))
+    else:                Z_ = np.zeros((N_samples, N_tasks, N_scenarios))
+    for i_sample in range(N_samples):
+        Z_[i_sample, ...] = _robust_sampling_from_multivariate_normal_v1(m_hat_[i_sample, :], C_hat_[i_sample, ...], N_scenarios)
     return Z_
 
-# Draw random samples from a normal distribution
-def _sample_normal(Y_hat_, S2_hat_, N_samples = 1):
-    if N_samples == 1: Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1]))
-    else:              Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1], N_samples))
-    for i in range(Y_hat_.shape[0]):
-        Z_[i, ...] = multivariate_normal(Y_hat_[i, :], np.diag(S2_hat_[i, :]), allow_singular = True).rvs(N_samples).T
-    return Z_
+# # Draw random samples from a normal distribution
+# def _sample_normal(Y_hat_, S2_hat_, N_samples = 1):
+#     if N_samples == 1: Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1]))
+#     else:              Z_ = np.zeros((Y_hat_.shape[0], Y_hat_.shape[1], N_samples))
+#     for i in range(Y_hat_.shape[0]):
+#         Z_[i, ...] = multivariate_normal(Y_hat_[i, :], np.diag(S2_hat_[i, :]), allow_singular = True).rvs(N_samples).T
+#     return Z_
 
 # Dense learning single-task mean and standard deviation
 def _dense_learning_predict(_DL, X_, DL):
@@ -682,213 +677,228 @@ def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_
 
     return models_
 
+# Calibrate Predictive probabilistic distribution
+def _calibrate_predictive_covariance_fit(M_dl_ts_hat_, C_dl_ts_hat_, Y_dl_ts_):
+    # Train an expert models for each hour
+    N_samples = Y_dl_ts_.shape[0]
+    N_task    = Y_dl_ts_.shape[1]
+    N_hours   = Y_dl_ts_.shape[2]
+    L_hat_    = []
+    for i_hour in range(N_hours):
+        # If calibration calculate lambda
+        S_hat_ = []
+        L_     = []
+        for i_sample in range(N_samples):
+            # Calculate optimal predictive covariance matrix
+            y_      = Y_dl_ts_[i_sample, :, i_hour]
+            mu_hat_ = M_dl_ts_hat_[i_sample, :, i_hour]
+            diff_   = (y_ - mu_hat_)[:, np.newaxis]
+            # Save predictive covariance matrix
+            S_hat_.append(C_dl_ts_hat_[i_sample, :, :, i_hour].flatten())
+            # Save optimal predictive covariance matrix
+            L_.append((diff_ @ diff_.T).flatten())
+        # Unbiese predictive covariance matrix
+        S_hat_ = np.stack(S_hat_)
+        S_hat_ = np.concatenate([S_hat_, np.ones((S_hat_.shape[0], 1))], axis = 1)
+        L_     = np.stack(L_)
+        L_hat_.append(np.linalg.pinv(S_hat_.T @ S_hat_) @ S_hat_.T @ L_)
+
+    return np.stack(L_hat_)
+
+# Unbias predictive covariance matrix
+def _unbias_covariance(l_hat_, C_hat_):
+    # Constants definition
+    N_task = C_hat_.shape[0]
+    # Covariance matrix to vector with bias
+    c_hat_ = np.concatenate([C_hat_.flatten(), np.ones((1,))], axis = 0)
+    # Correct bias on the covariance
+    l_bar_ = l_hat_.T @ c_hat_
+    # Reshape predicted covariance to matrix shape
+    L_bar_ = l_bar_.reshape(N_task, N_task)
+    try:
+        # Trye to invert matrix
+        I_ = np.linalg.pinv(L_bar_)
+    except:
+        print('Singular matrix -> Restoring covariance matrix...')
+        L_bar_ = C_hat_
+    return L_bar_
+
+# Calibrate the predictive covariance matrix
+def _calibrate_predictive_covariance(M_dl_ts_hat_, C_dl_ts_hat_, L_hat_):
+    # Contants definition
+    N_samples  = C_dl_ts_hat_.shape[0]
+    N_task     = C_dl_ts_hat_.shape[1]
+    N_horizons = C_dl_ts_hat_.shape[-1]
+    # Variables definition
+    l_bar_     = np.zeros((N_samples, N_task, N_horizons))
+    L_bar_all_ = []
+    for i_sample in range(N_samples):
+        L_bar_ = []
+        for i_horizon in range(N_horizons):
+            l_hat_ = L_hat_[i_horizon, ...]
+            C_hat_ = C_dl_ts_hat_[i_sample, ..., i_horizon]
+            # Unbias predictive covariance matrix
+            L_bar_.append(_unbias_covariance(l_hat_, C_hat_))
+        L_bar_all_.append(np.stack(L_bar_))
+    # Rearrange dimensions order in the convariance tensor
+    L_bar_ = np.moveaxis(np.stack(L_bar_all_), [1], [3])
+    # Get variance from the convariance matrix
+    for i_sample in range(N_samples):
+        for i_horizon in range(N_horizons):
+            try:
+                z = multivariate_normal(M_dl_ts_hat_[i_sample, ..., i_horizon], L_bar_[i_sample, ..., i_horizon], allow_singular = True).rvs(1)
+                l_bar_[i_sample, :, i_horizon]   = np.diag(L_bar_[i_sample, ..., i_horizon])
+            except:
+                L_bar_[i_sample, ..., i_horizon] = C_dl_ts_hat_[i_sample, ..., i_horizon]
+                l_bar_[i_sample, :, i_horizon]   = np.diag(C_dl_ts_hat_[i_sample, ..., i_horizon])
+    return l_bar_, L_bar_
+
 # Predictive probabilistic distribution
 def _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd):
     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
+    # Constants definition
+    N_samples  = Y_dl_ts_.shape[0]
+    N_tasks    = Y_dl_ts_.shape[1]
+    N_horizons = Y_dl_ts_.shape[2]
+    # Variables definition
     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
     S2_dl_ts_hat_     = np.zeros(Y_dl_ts_.shape)
-    C_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
+    C_dl_ts_hat_      = np.zeros((N_samples, N_tasks, N_tasks, N_horizons))
     # Train an expert models for each hour
-    for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
+    for i_horizon in range(N_horizons):
         # Train an expert models for each hour
-        for tsk in range(Y_dl_ts_stnd_hat_.shape[1]):
+        for i_task in range(N_tasks):
             # Define training and testing recursive dataset
-            X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
-            #print(key, thetas_[i_theta_[tsk]], hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-            Y_dl_ts_stnd_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
+            X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_                                               = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, i_horizon, i_task)
+            Y_dl_ts_stnd_hat_[..., i_task, i_horizon], S2_dl_ts_hat_[..., i_task, i_horizon] = _dense_learning_predict(models_[i_horizon][i_task], X_dl_ts_rc_, DL)
         # Undo standardization from dense learning multi-task prediction
         if y_dl_stnd == 1:
             # To undo predictive covariance necessary covariance instead of variance
-            M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-            S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
-        for obv in range(C_dl_ts_hat_.shape[0]):
-            C_dl_ts_hat_[obv, ..., hrzn] = np.diag(S2_dl_ts_hat_[obv, ..., hrzn])
+            M_dl_ts_hat_[..., i_horizon]  = dl_scaler_[1][i_horizon].inverse_transform(Y_dl_ts_stnd_hat_[..., i_horizon])
+            S2_dl_ts_hat_[..., i_horizon] = dl_scaler_[1][i_horizon].var_*S2_dl_ts_hat_[..., i_horizon]
+        for i_sample in range(N_samples):
+            C_dl_ts_hat_[i_sample, ..., i_horizon] = np.diag(S2_dl_ts_hat_[i_sample, ..., i_horizon])
     return M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_
-
-# Make multitask probabilistic prediction
-# def _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-#                             thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
-#     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
-#     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
-#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-#     #print(Y_dl_ts_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, S2_dl_noise_.shape)
-#     # Train an expert models for each hour
-#     for hrzn in range(Y_dl_ts_hat_.shape[2]):
-#         # Define training and testing recursive dataset
-#         X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-#         #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-#         Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
-#         # Undo standardization from dense learning multi-task prediction
-#         if y_dl_stnd == 1:
-#             # To undo predictive covariance necessary covariance instead of variance
-#             Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-#             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-#             S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
-#         # Sample Predictive Posterior Distribution
-#         Y_dl_ts_hat_[..., hrzn, :] = _sample_multivariate_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn], N_samples)
-#     return Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_
 
 # Multitask predictive probabilistic distribution
 def _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd):
     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
+    # Constants definition
+    N_samples  = Y_dl_ts_.shape[0]
+    N_tasks    = Y_dl_ts_.shape[1]
+    N_horizons = Y_dl_ts_.shape[2]
+    # Variables definition
     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
     S2_dl_ts_hat_     = np.zeros(Y_dl_ts_.shape)
-    C_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-    #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
+    C_dl_ts_hat_      = np.zeros((N_samples, N_tasks, N_tasks, N_horizons))
     # Train an expert models for each hour
-    for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
+    for i_horizon in range(N_horizons):
         # Define training and testing recursive dataset
-        X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_                    = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-        Y_dl_ts_stnd_hat_[..., hrzn], C_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+        X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_                              = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, i_horizon, tsk = None)
+        Y_dl_ts_stnd_hat_[..., i_horizon], C_dl_ts_hat_[..., i_horizon] = _dense_learning_multitask_predict(models_[i_horizon], X_dl_ts_rc_, DL)
         # Undo standardization from dense learning multi-task prediction
         if y_dl_stnd == 1:
             # To undo predictive covariance necessary covariance instead of variance
-            Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-            M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-            C_dl_ts_hat_[..., hrzn] = Cov_*C_dl_ts_hat_[..., hrzn]
-
-    for smpl in range(S2_dl_ts_hat_.shape[0]):
-        for tsk in range(S2_dl_ts_hat_.shape[-1]):
-            S2_dl_ts_hat_[smpl, :, tsk] = np.diag(C_dl_ts_hat_[smpl, ..., tsk])
-
+            Cov_ = np.sqrt(dl_scaler_[1][i_horizon].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][i_horizon].var_[:, np.newaxis].T)
+            M_dl_ts_hat_[..., i_horizon] = dl_scaler_[1][i_horizon].inverse_transform(Y_dl_ts_stnd_hat_[..., i_horizon])
+            C_dl_ts_hat_[..., i_horizon] = Cov_*C_dl_ts_hat_[..., i_horizon]
+    # Get variance from the diagonla
+    for i_sample in range(N_samples):
+        for i_horizon in range(N_horizons):
+            S2_dl_ts_hat_[i_sample, :, i_horizon] = np.diag(C_dl_ts_hat_[i_sample, ..., i_horizon])
     return M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_
 
-# # Multitask predictive probabilistic distribution
-# def _multitask_pred_prob_dist_v0(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd):
-#     #(24, 3, 3) (3, 3) | (24, 3, 24) (8, 3, 24) (3, 24) - Multitask samples
-#     Y_dl_ts_stnd_hat_ = np.zeros(Y_dl_ts_.shape)
-#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-#     #print(Y_dl_ts_stnd_hat_.shape, M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape)
-#     # Train an expert models for each hour
-#     for hrzn in range(Y_dl_ts_stnd_hat_.shape[2]):
-#         # Define training and testing recursive dataset
-#         X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-#         #print(key, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-#         Y_dl_ts_stnd_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn] = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
-#         # Undo standardization from dense learning multi-task prediction
-#         if y_dl_stnd == 1:
-#             # To undo predictive covariance necessary covariance instead of variance
-#             Cov_ = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-#             M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(Y_dl_ts_stnd_hat_[..., hrzn])
-#             S2_dl_ts_hat_[..., hrzn] = Cov_*S2_dl_ts_hat_[..., hrzn]
-#     return M_dl_ts_hat_, S2_dl_ts_hat_
-
-# # Make joint probabilistic predictions
-# def _joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-#                         thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
-#     # Variable initialization
-#     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-#     M_dl_ts_hat_      = np.zeros(Y_dl_ts_.shape)
-#     S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2]))
-#     # Draw samples from predictive posterior
-#     for smpl in range(N_samples):
-#         # Train an expert models for each hour
-#         for hrzn in range(Y_dl_ts_hat_.shape[2]):
-#             # Train an expert models for each hour
-#             for tsk in range(Y_dl_ts_hat_.shape[1]):
-#                 # Define training and testing recursive dataset
-#                 X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
-#                 #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-#                 M_dl_ts_hat_[..., tsk, hrzn], S2_dl_ts_hat_[..., tsk, hrzn] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
-#             # Undo standardization from dense learning multi-task prediction
-#             if y_dl_stnd == 1:
-#                 # To undo predictive covariance necessary covariance instead of variance
-#                 M_dl_ts_hat_[..., hrzn]  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_[..., hrzn])
-#                 S2_dl_ts_hat_[..., hrzn] = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_[..., hrzn]
-#             # Sample Predictive Posterior Distribution
-#             Y_dl_ts_hat_[..., hrzn, smpl] = _sample_normal(M_dl_ts_hat_[..., hrzn], S2_dl_ts_hat_[..., hrzn])
-#             # Standardized predictors for recursive model
-#             if y_dl_stnd == 1:
-#                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
-#     return Y_dl_ts_hat_
-
 # Joint probabilistic predictions
-def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100):
-    # Variable initialization
-    Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    M_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1]))
-    S2_dl_ts_hat_     = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1]))
+def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, L_hat_, g_dl_, RC, DL, y_dl_stnd, N_scenarios = 100):
+    # Constants definition
+    N_samples  = Y_dl_ts_.shape[0]
+    N_tasks    = Y_dl_ts_.shape[1]
+    N_horizons = Y_dl_ts_.shape[2]
+    # Variables definition
+    Y_dl_ts_stnd_hat_ = np.zeros((N_samples, N_tasks, N_horizons, N_scenarios))
+    Y_dl_ts_hat_      = np.zeros((N_samples, N_tasks, N_horizons, N_scenarios))
+    M_dl_ts_hat_      = np.zeros((N_samples, N_tasks))
+    S2_dl_ts_hat_     = np.zeros((N_samples, N_tasks))
     # Draw samples from predictive posterior
-    for smpl in range(N_samples):
+    for i_scenario in range(N_scenarios):
         # Train an expert models for each hour
-        for hrzn in range(Y_dl_ts_hat_.shape[2]):
+        for i_horizon in range(N_horizons):
             # Train an expert models for each hour
-            for tsk in range(Y_dl_ts_hat_.shape[1]):
+            for i_task in range(N_tasks):
                 # Define training and testing recursive dataset
-                X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_              = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk)
-                M_dl_ts_hat_[..., tsk], S2_dl_ts_hat_[..., tsk] = _dense_learning_predict(models_[hrzn][tsk], X_dl_ts_rc_, DL)
+                X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_                    = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., i_scenario], g_dl_, W_hat_, RC, i_horizon, i_task)
+                M_dl_ts_hat_[..., i_task], S2_dl_ts_hat_[..., i_task] = _dense_learning_predict(models_[i_horizon][i_task], X_dl_ts_rc_, DL)
             # Undo standardization from dense learning multi-task prediction
             if y_dl_stnd == 1:
                 # To undo predictive covariance necessary covariance instead of variance
-                M_dl_ts_hat_  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_)
-                S2_dl_ts_hat_ = dl_scaler_[1][hrzn].var_*S2_dl_ts_hat_
+                M_dl_ts_hat_  = dl_scaler_[1][i_horizon].inverse_transform(M_dl_ts_hat_)
+                S2_dl_ts_hat_ = dl_scaler_[1][i_horizon].var_*S2_dl_ts_hat_
+            # Construct covariance matrix from vector of variances
+            C_dl_ts_hat_ = np.concatenate([np.diag(S2_dl_ts_hat_[i_sample, :])[np.newaxis, ...] for i_sample in range(N_samples)], axis = 0)
+            # Unbias covariance matrix
+            L_dl_ts_hat_ = C_dl_ts_hat_.copy()
+            for i_sample in range(N_samples):
+                L_dl_ts_hat_[i_sample, ...] = _unbias_covariance(L_hat_[i_horizon, ...], C_dl_ts_hat_[i_sample, ...])
             # Sample Predictive Posterior Distribution
-            Y_dl_ts_hat_[..., hrzn, smpl] = _sample_multivariate_normal(M_dl_ts_hat_, np.concatenate([np.diag(S2_dl_ts_hat_[i, :])[np.newaxis, ...] for i in range(S2_dl_ts_hat_.shape[0])], axis = 0))
+            Y_dl_ts_hat_[..., i_horizon, i_scenario] = _sample_multivariate_normal(M_dl_ts_hat_, L_dl_ts_hat_)
             # Standardized predictors for recursive model
             if y_dl_stnd == 1:
-                Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
+                Y_dl_ts_stnd_hat_[..., i_horizon, i_scenario] = dl_scaler_[1][i_horizon].transform(Y_dl_ts_hat_[..., i_horizon, i_scenario])
     return Y_dl_ts_hat_
+
+# # Joint predictive scenarios generation
+# def _joint_predictive_scenarios(M_dl_ts_hat_, S2_dl_ts_hat_, N_scenarios = 100):
+#     # Define constants
+#     N_samples  = M_dl_ts_hat_.shape[0]
+#     N_tasks    = M_dl_ts_hat_.shape[1]
+#     N_horizons = M_dl_ts_hat_.shape[2]
+#     # Variable initialization
+#     Y_dl_ts_hat_ = np.zeros((N_samples, N_tasks, N_horizons, N_scenarios))
+#     # Draw samples from predictive posterior
+#     for i_scenario in range(N_scenarios):
+#         # Train an expert models for each hour
+#         for i_horizon in range(N_horizons):
+#             # Set variance on the diagonal if not provided full covariance matrix
+#             if S2_dl_ts_hat_.ndim == 3:
+#                 C_dl_ts_hat_ = np.concatenate([np.diag(S2_dl_ts_hat_[i_sample, :, i_horizon])[np.newaxis, ...] for i_sample in range(N_samples)], axis = 0)
+#             # Sample Predictive Posterior Distribution
+#             Y_dl_ts_hat_[..., i_horizon, i_scenario] = _sample_multivariate_normal(M_dl_ts_hat_[..., i_horizon], C_dl_ts_hat_)
+#     return Y_dl_ts_hat_
 
 # Multitask joint prediction
-def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100):
-    # Variable initialization
-    Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-    #print(Y_dl_ts_stnd_hat_.shape, Y_dl_ts_hat_.shape)
+def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, L_hat_, g_dl_, RC, DL, y_dl_stnd, N_scenarios = 100):
+    # Constants definition
+    N_samples  = Y_dl_ts_.shape[0]
+    N_tasks    = Y_dl_ts_.shape[1]
+    N_horizons = Y_dl_ts_.shape[2]
+    # Variables definition
+    Y_dl_ts_stnd_hat_ = np.zeros((N_samples, N_tasks, N_horizons, N_scenarios))
+    Y_dl_ts_hat_      = np.zeros((N_samples, N_tasks, N_horizons, N_scenarios))
     # Draw samples from predictive posterior
-    for smpl in range(N_samples):
+    for i_scenario in range(N_scenarios):
         # Train an expert models for each hour
-        for hrzn in range(Y_dl_ts_hat_.shape[2]):
+        for i_horizon in range(N_horizons):
             # Define training and testing recursive dataset
-            X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk = None)
-            M_dl_ts_hat_, S2_dl_ts_hat_        = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
+            X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., i_scenario], g_dl_, W_hat_, RC, i_horizon, tsk = None)
+            M_dl_ts_hat_, C_dl_ts_hat_         = _dense_learning_multitask_predict(models_[i_horizon], X_dl_ts_rc_, DL)
             # Undo standardization from dense learning multi-task prediction
             if y_dl_stnd == 1:
                 # To undo predictive covariance necessary covariance instead of variance
-                Cov_          = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-                M_dl_ts_hat_  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_)
-                S2_dl_ts_hat_ = Cov_*S2_dl_ts_hat_
+                Cov_          = np.sqrt(dl_scaler_[1][i_horizon].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][i_horizon].var_[:, np.newaxis].T)
+                M_dl_ts_hat_  = dl_scaler_[1][i_horizon].inverse_transform(M_dl_ts_hat_)
+                C_dl_ts_hat_  = Cov_*C_dl_ts_hat_
+            # Unbias covariance matrix
+            L_dl_ts_hat_ = C_dl_ts_hat_.copy()
+            for i_sample in range(N_samples):
+                L_dl_ts_hat_[i_sample, ...] = _unbias_covariance(L_hat_[i_horizon, ...], C_dl_ts_hat_[i_sample, ...])
             # Sample Predictive Posterior Distribution
-            Y_dl_ts_hat_[..., hrzn, smpl] = _sample_multivariate_normal(M_dl_ts_hat_, S2_dl_ts_hat_)
+            Y_dl_ts_hat_[..., i_horizon, i_scenario] = _sample_multivariate_normal(M_dl_ts_hat_, L_dl_ts_hat_)
             # Standardized predictors for recursive model
             if y_dl_stnd == 1:
-                Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
+                Y_dl_ts_stnd_hat_[..., i_horizon, i_scenario] = dl_scaler_[1][i_horizon].transform(Y_dl_ts_hat_[..., i_horizon, i_scenario])
     return Y_dl_ts_hat_
-
-# # Multitask joint prediction
-# def _multitask_joint_prediction_v0(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100):
-#     # Variable initialization
-#     Y_dl_ts_stnd_hat_ = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-#     Y_dl_ts_hat_      = np.zeros((Y_dl_ts_.shape[0], Y_dl_ts_.shape[1], Y_dl_ts_.shape[2], N_samples))
-#     #print(Y_dl_ts_stnd_hat_.shape, Y_dl_ts_hat_.shape)
-#     # Draw samples from predictive posterior
-#     for smpl in range(N_samples):
-#         # Train an expert models for each hour
-#         for hrzn in range(Y_dl_ts_hat_.shape[2]):
-#             # Define training and testing recursive dataset
-#             X_dl_ts_rc_, Y_dl_ts_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_ts_stnd_, Y_dl_ts_, Y_dl_ts_stnd_hat_[..., smpl], g_dl_, W_hat_, RC, hrzn, tsk = None)
-#             #print(key, thetas_[i_theta_[tsk]], smpl, hrzn, X_dl_ts_rc_.shape, Y_dl_ts_rc_.shape, g_dl_rc_.shape)
-#             M_dl_ts_hat_, S2_dl_ts_hat_ = _dense_learning_multitask_predict(models_[hrzn], X_dl_ts_rc_, DL)
-#             # Undo standardization from dense learning multi-task prediction
-#             if y_dl_stnd == 1:
-#                 # To undo predictive covariance necessary covariance instead of variance
-#                 Cov_          = np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis]) @ np.sqrt(dl_scaler_[1][hrzn].var_[:, np.newaxis].T)
-#                 M_dl_ts_hat_  = dl_scaler_[1][hrzn].inverse_transform(M_dl_ts_hat_)
-#                 S2_dl_ts_hat_ = Cov_*S2_dl_ts_hat_
-#             # Sample Predictive Posterior Distribution
-#             Y_dl_ts_hat_[..., hrzn, smpl] = _sample_multivariate_normal(M_dl_ts_hat_, S2_dl_ts_hat_)
-#             # Standardized predictors for recursive model
-#             if y_dl_stnd == 1:
-#                 Y_dl_ts_stnd_hat_[..., hrzn, smpl] = dl_scaler_[1][hrzn].transform(Y_dl_ts_hat_[..., hrzn, smpl])
-#     return Y_dl_ts_hat_
 
 __all__ = ['_naive_forecasts',
            '_sparse_learning_predict',
@@ -902,11 +912,12 @@ __all__ = ['_naive_forecasts',
            '_dense_learning_predict',
            '_dense_learning_multitask_predict',
            '_sample_multivariate_normal',
-           '_sample_normal',
            '_fit_dense_learning',
            '_fit_sparse_learning',
            '_fit_multitask_dense_learning',
            '_pred_prob_dist',
            '_multitask_pred_prob_dist',
+           '_calibrate_predictive_covariance_fit',
+           '_calibrate_predictive_covariance',
            '_joint_prob_prediction',
            '_multitask_joint_prediction']

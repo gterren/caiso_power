@@ -1,11 +1,11 @@
 #!/bin/bash -l
 #SBATCH --job-name=test-RVM
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=28
+#SBATCH --ntasks-per-node=3
 #SBATCH --time=48:00:00
 ##SBATCH --mem=187G
 ##SBATCH --output=res.txt
-##SBATCH -p default
+##SBATCH -p short
 ##SBATCH --mail-type=BEGIN,END
 ##SBATCH --mail-user=guillermoterren@ucsb.edu
 #SBATCH --output=CAISO_%x.%j.out
@@ -14,10 +14,9 @@ export PATH=$PATH:/home/gterren/anaconda3/bin
 source activate oasis
 cd /home/gterren/caiso_power/software/shallow_learning
 
-#time mpirun -np 32 python -W ignore test_shallow_learning_debugging.py $1 $2 $3 0
-time mpirun -np 28 python -W ignore test_shallow_learning.py $1 $2 $3 0
 #time mpirun -np 28 python -W ignore test_shallow_learning.py $1 $2 $3 0
-#time mpirun -np 2 python -W ignore model_shallow_learning.py $1
-#time mpirun -np 34 python -W ignore test_shallow_learning.py 1 2 2 0
-#time mpirun -np 25 python -W ignore test_shallow_learning.py $1 $2 $3 $4
-#mpirun -np 1 python -W ignore val_shallow_learning_temp.py $1 $2 $3 $4
+#time mpirun -np 1 python -W ignore val_shallow_learning.py $1 $2 $3 $4
+#time mpirun -np 30 python -W ignore val_shallow_learning_batch.py $1 $2 $3
+#mpirun -np 1 python -W ignore val_multisource_shallow_learning_batch.py $1 $2 $3
+#mpirun -np 1 python -W ignore model_shallow_learning.py $1 $2
+mpirun -np 1 python -W ignore test_shallow_learning.py $1 $2 $3 $4

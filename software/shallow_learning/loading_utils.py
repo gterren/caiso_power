@@ -351,6 +351,16 @@ def _load_processed_dataset(dataset, path):
 
     return X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_
 
+
+# Save data in a pickle file
+def _save_dict(_data, path, file_name):
+    with open(path + file_name, 'wb') as _handle:
+        pickle.dump(_data, _handle)
+
+# Load data in a pickle file
+def _load_dict(path, file_name):
+    return pickle.load(open(path + file_name,'rb'))
+
 __all__ = ['_load_data_in_chunks',
            '_generate_dataset',
            '_save_baseline_fc',
@@ -361,4 +371,6 @@ __all__ = ['_load_data_in_chunks',
            '_sparse_learning_dataset_format',
            '_dense_learning_dataset',
            '_dense_learning_stand',
-           '_sparse_learning_stand']
+           '_sparse_learning_stand',
+           '_save_dict',
+           '_load_dict']

@@ -39,14 +39,27 @@ def _experiments(lists_):
     return list(itertools.product(*lists_))
 
 # Get the experiments index to run in this job
-def _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
+def _random_experiments_index_batch_job(exps_, i_job, N_jobs):
     np.random.seed(0)
     # Random perdumations in the experiments index list for each batch
     idx_exps_          = list(np.random.permutation(len(exps_)))
-    idx_exps_in_batch_ = list(np.array_split(idx_exps_, N_batches)[i_batch])
-    # Get experiment indexes in Job
-    idx_exps_in_job_ = list(np.array_split(idx_exps_in_batch_, N_jobs)[i_job])
+    # idx_exps_in_batch_ = list(np.array_split(idx_exps_, N_batches)[i_batch])
+    # # Get experiment indexes in Job
+    idx_exps_in_job_ = list(np.array_split(idx_exps_, N_jobs)[i_job])
     return idx_exps_in_job_
+
+# Get the experiments index to run in this job
+def _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
+    # Get experiment indexes in Job
+    idx_exps_          = list(np.linspace(0, len(exps_) - 1, len(exps_), dtype = int))
+    # print(idx_exps_)
+    # idx_exps_in_batch_ = list(np.array_split(idx_exps_, N_batches)[i_batch])
+    # print(idx_exps_in_batch_)
+    # print(np.array_split(idx_exps_in_batch_, N_jobs))
+    # idx_exps_in_job_   = list(np.array_split(idx_exps_in_batch_, N_jobs)[i_job])
+    # print(idx_exps_in_job_)
+
+    return [idx_exps_[i_job]]
 
 # Save in the next row of a .csv file
 def _save_val_in_csv_file(data_, meta_, assets_, path, name):
@@ -82,14 +95,9 @@ def _flatten_DataFrame(df_):
     new_df_.index = ["_".join(i) for i in new_df_.index]
     return new_df_.to_frame().T
 
-# Save data in a pickle file
-def _save_dict(_data, path, file_name):
-    with open(path + file_name, 'wb') as _handle:
-        pickle.dump(_data, _handle)
-
 __all__ = ['_experiments',
            '_get_node_info',
            '_combine_parallel_results',
            '_experiments_index_batch_job',
-           '_flatten_DataFrame',
-           '_save_dict']
+           '_random_experiments_index_batch_job',
+           '_flatten_DataFrame']
