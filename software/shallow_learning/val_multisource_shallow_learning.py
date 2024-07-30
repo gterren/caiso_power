@@ -62,17 +62,16 @@ dl_method = dl_methods_[DL]
 print(sl_method, dl_method)
 
 # Generate input and output file names
-resource  = '_'.join([resources_[i_resource] for i_resource in i_resources_])
-dataset   = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}.pkl'.format(i_mask)
-file_name = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_])
-file_name = 'val-{}-{}-{}.csv'.format(file_name, sl_method, dl_method)
-print(resource, dataset, file_name)
+resource = '_'.join([resources_[i_resource] for i_resource in i_resources_])
+dataset  = '_'.join(['{}-{}'.format(resources_[i_resource], '-'.join(map(str, i_assets_[i_resource]))) for i_resource in i_resources_]) + '_M{}.pkl'.format(i_mask)
+source   = ['NP15', 'SP15', 'ZP26'][i_resources]
+print(resource, dataset, source)
 
 # Define identification experiment key
 i_exp = int(sys.argv[3])
 
 # Define identification experiment key
-N_kfolds  = 5
+N_kfolds = 5
 print(i_job, N_jobs, N_kfolds)
 
 # Sparse learning model standardization
@@ -110,15 +109,15 @@ M_ = _load_spatial_masks(i_resources_, path_to_aux)
 X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_ = _load_processed_dataset(dataset, path_to_prc)
 print(X_sl_.shape, Y_sl_.shape, Y_sl_.shape, X_dl_.shape, Y_dl_.shape)
 
-X_sl_ = X_sl_[800:, ...]
-Y_sl_ = Y_sl_[800:, ...]
-X_dl_ = X_dl_[800:, ...]
-Y_dl_ = Y_dl_[800:, ...]
-Z_    = Z_[:, 800:, ...]
-ZZ_   = ZZ_[:, 800:, ...]
-Y_ac_ = Y_ac_[:, 800:, ...]
-Y_fc_ = Y_fc_[:, 800:, ...]
-print(X_sl_.shape, Y_sl_.shape, Y_sl_.shape, X_dl_.shape, Y_dl_.shape)
+# X_sl_ = X_sl_[800:, ...]
+# Y_sl_ = Y_sl_[800:, ...]
+# X_dl_ = X_dl_[800:, ...]
+# Y_dl_ = Y_dl_[800:, ...]
+# Z_    = Z_[:, 800:, ...]
+# ZZ_   = ZZ_[:, 800:, ...]
+# Y_ac_ = Y_ac_[:, 800:, ...]
+# Y_fc_ = Y_fc_[:, 800:, ...]
+# print(X_sl_.shape, Y_sl_.shape, Y_sl_.shape, X_dl_.shape, Y_dl_.shape)
 
 # Split data in training and testing
 X_sl_tr_, X_sl_ts_ = _training_and_testing_dataset(X_sl_)
@@ -241,20 +240,9 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
     # Validation scores
     E_dl_val_ts_[i_fold, ...] = _baseline_det_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_).to_numpy()
     P_dl_val_ts_[i_fold, ...] = _prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, S2_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
-    
-    #print(Y_dl_val_ts_.shape, M_dl_val_ts_hat_.shape, C_dl_val_ts_hat_.shape, S2_dl_val_ts_hat_.shape, Y_dl_val_ts_hat_.shape)
-    # Y_dl_val_ts_p_           = Y_dl_val_ts_[..., 4:-4]
-    # M_dl_val_ts_hat_p_       = M_dl_val_ts_hat_[..., 4:-4]
-    # C_dl_val_ts_hat_p_       = C_dl_val_ts_hat_[..., 4:-4]
-    # S2_dl_val_ts_hat_p_      = S2_dl_val_ts_hat_[..., 4:-4]
-    # Y_dl_val_ts_hat_p_       = Y_dl_val_ts_hat_[..., 4:-4, :]
+    MV_dl_val_ts_[i_fold, :]  = _multiresource_prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, C_dl_val_ts_hat_, S2_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
 
-    MV_dl_val_ts_[i_fold, :] = _multiresource_prob_metrics(Y_dl_val_ts_, M_dl_val_ts_hat_, C_dl_val_ts_hat_, S2_dl_val_ts_hat_, Y_dl_val_ts_hat_).to_numpy()
-    exit()
     i_fold += 1
-
-sigmas_  = np.mean(smoothing_val_ts_, axis = 0).tolist()
-lambdas_ = np.mean(calibration_val_ts_, axis = 0)
 
 E_dl_val_ts_  = pd.DataFrame(np.mean(E_dl_val_ts_, axis = 0), columns = ['RMSE', 'MAE', 'MBE'],
                                                               index   = ['NP15', 'SP15', 'ZP26'][:N_tasks])
@@ -263,11 +251,9 @@ P_dl_val_ts_  = pd.DataFrame(np.mean(P_dl_val_ts_, axis = 0), columns = ['IIS', 
                                                               index   = ['NP15', 'SP15', 'ZP26'][:N_tasks])
 
 MV_dl_val_ts_ = pd.DataFrame(np.mean(MV_dl_val_ts_, axis = 0), columns = [''],
-                                                               index   = ['AggLogS', 'sAggLogS',
-                                                                          'ES_spatial', 'VS_spatial', 'ES_temporal', 'VS_temporal',
-                                                                          'LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
+                                                               index   = ['LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
 
-meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, thetas_, sigmas_, time.time() - t_init], index = ['experiment',
+meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, thetas_, time.time() - t_init], index = ['experiment',
                                                                                                                                    'sparse_method',
                                                                                                                                    'x_sl_std',
                                                                                                                                    'y_sl_std',
@@ -275,11 +261,9 @@ meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd,
                                                                                                                                    'x_dl_std',
                                                                                                                                    'y_dl_std',
                                                                                                                                    'parameters',
-                                                                                                                                   'sigmas',
                                                                                                                                    'time']).T
 
 R_dl_val_ts_.append(pd.concat([meta_, _flatten_DataFrame(P_dl_val_ts_), _flatten_DataFrame(E_dl_val_ts_), _flatten_DataFrame(MV_dl_val_ts_)], axis = 1))
 
-_save_dict([sigmas_, lambdas_], path_to_mdl, file_name = '{}-{}-{}_e{}.pkl'.format(resource, sl_method, dl_method, score, i_exp))
-
-_combine_parallel_results(comm, pd.concat(R_dl_val_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'val-{}-{}-{}_v1.csv'.format(resource, sl_method, dl_method))
+_save_dict([smoothing_val_ts_, calibration_val_ts_], path_to_mdl, file_name = '{}-{}-{}_e{}.pkl'.format(source, sl_method, dl_method, i_exp))
+_combine_parallel_results(comm, pd.concat(R_dl_val_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'val-{}-{}-{}.csv'.format(source, sl_method, dl_method))

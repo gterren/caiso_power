@@ -95,9 +95,22 @@ def _flatten_DataFrame(df_):
     new_df_.index = ["_".join(i) for i in new_df_.index]
     return new_df_.to_frame().T
 
+def _break_test_into_batches(X_tr_, X_ts_, i_batch, N_batches = 7):
+
+    N_ts    = X_ts_.shape[0]
+    N_batch = N_ts//N_batches
+    idx_    = np.linspace(0, N_ts - 1, N_ts, dtype = int)
+    # if i_test_batch > 0:
+    #     idx_tr_ = idx_[:i_test_batch*N_batch]
+    #     X_tr_   = np.concatenate([X_tr_, X_ts_[idx_tr_, ...]], axis = 0)
+    idx_ts_ = idx_[i_test_batch*N_batch:(i_test_batch + 1)*N_batch]
+    X_ts_   = X_ts_[idx_ts_, ...]
+    return X_tr_, X_ts_
+
 __all__ = ['_experiments',
            '_get_node_info',
            '_combine_parallel_results',
            '_experiments_index_batch_job',
            '_random_experiments_index_batch_job',
-           '_flatten_DataFrame']
+           '_flatten_DataFrame',
+           '_break_test_into_batches']

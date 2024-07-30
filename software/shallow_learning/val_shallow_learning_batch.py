@@ -262,9 +262,7 @@ for i_exp in i_exps_:
                                                                   index   = ['NP15', 'SP15', 'ZP26'][:N_tasks])
     
     MV_dl_val_ts_ = pd.DataFrame(np.mean(MV_dl_val_ts_, axis = 0), columns = [''],
-                                                                   index   = ['AggLogS', 'sAggLogS',
-                                                                              'ES_spatial', 'VS_spatial', 'ES_temporal', 'VS_temporal',
-                                                                              'LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
+                                                                   index   = ['LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
 
     meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd, thetas_, sigmas_, time.time() - t_init], index = ['experiment',
                                                                                                                                        'sparse_method',

@@ -868,7 +868,8 @@ def _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_,
 #     return Y_dl_ts_hat_
 
 # Multitask joint prediction
-def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, L_hat_, g_dl_, RC, DL, y_dl_stnd, N_scenarios = 100):
+def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, L_hat_, g_dl_, RC, DL, y_dl_stnd, N_scenarios = 100,
+                                                                                                                        calibration = True):
     # Constants definition
     N_samples  = Y_dl_ts_.shape[0]
     N_tasks    = Y_dl_ts_.shape[1]
@@ -891,8 +892,9 @@ def _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_
                 C_dl_ts_hat_  = Cov_*C_dl_ts_hat_
             # Unbias covariance matrix
             L_dl_ts_hat_ = C_dl_ts_hat_.copy()
-            for i_sample in range(N_samples):
-                L_dl_ts_hat_[i_sample, ...] = _unbias_covariance(L_hat_[i_horizon, ...], C_dl_ts_hat_[i_sample, ...])
+            if calibration:
+                for i_sample in range(N_samples):
+                    L_dl_ts_hat_[i_sample, ...] = _unbias_covariance(L_hat_[i_horizon, ...], C_dl_ts_hat_[i_sample, ...])
             # Sample Predictive Posterior Distribution
             Y_dl_ts_hat_[..., i_horizon, i_scenario] = _sample_multivariate_normal(M_dl_ts_hat_, L_dl_ts_hat_)
             # Standardized predictors for recursive model

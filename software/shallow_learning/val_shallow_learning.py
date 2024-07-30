@@ -16,7 +16,8 @@ i_job, N_jobs, comm = _get_node_info()
 # Degine path to data
 path_to_prc = r"/home/gterren/caiso_power/data/processed/"
 path_to_aux = r"/home/gterren/caiso_power/data/auxiliary/"
-path_to_rst = r"/home/gterren/caiso_power/results/"
+path_to_rst = r"/home/gterren/caiso_power/results/journal_paper_w_lambdas/"
+path_to_mdl = r"/home/gterren/caiso_power/models/journal_paper_w_lambdas/"
 
 # Notes:
 # SL = 0: X = {0, 1}, Y = {0}
@@ -138,7 +139,9 @@ print(E_per_ts_)
 print(E_ca_ts_)
 print(E_clm_ts_)
 
-N_tasks = Y_dl_ts_.shape[1]
+N_samples  = Y_dl_ts_.shape[0]
+N_tasks    = Y_dl_ts_.shape[1]
+N_horizons = Y_dl_ts_.shape[2]
 
 # Generate sparse learning training and testing dataset in the correct format
 X_sl_tr_, Y_sl_tr_ = _sparse_learning_dataset_format(X_sl_tr_, Y_sl_tr_)
@@ -155,10 +158,12 @@ i_fold  = 0
 print(i_job, i_exp, x_sl_stnd, y_sl_stnd,  x_dl_stnd, y_dl_stnd, thetas_)
 
 # Initialize variables
-E_dl_val_ts_      = np.zeros((N_kfolds, N_tasks, 3))
-P_dl_val_ts_      = np.zeros((N_kfolds, N_tasks, 3))
-MV_dl_val_ts_     = np.zeros((N_kfolds, 19))
-smoothing_val_ts_ = np.zeros((N_kfolds, N_tasks))
+E_dl_val_ts_        = np.zeros((N_kfolds, N_tasks, 3))
+P_dl_val_ts_        = np.zeros((N_kfolds, N_tasks, 3))
+MV_dl_val_ts_       = np.zeros((N_kfolds, 19))
+smoothing_val_ts_   = np.zeros((N_kfolds, N_tasks))
+calibration_val_ts_ = np.zeros((N_kfolds, N_horizons, N_tasks*N_tasks + 1, N_tasks*N_tasks))
+
 # Loop over validation k-folds
 for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                               random_state = None,
@@ -207,7 +212,6 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
 
     # Calibrate predictive covariance matrix
     S2_dl_val_ts_hat_, C_dl_val_ts_hat_ = _calibrate_predictive_covariance(M_dl_val_ts_hat_, C_dl_val_ts_hat_, calibration_val_ts_[i_fold, ...])
-
 
     # Joint probabilistic predictions
     if DL != 3:
@@ -265,6 +269,6 @@ meta_ = pd.DataFrame([i_exp, SL, x_sl_stnd, y_sl_stnd, DL, x_dl_stnd, y_dl_stnd,
 
 R_dl_val_ts_.append(pd.concat([meta_, _flatten_DataFrame(P_dl_val_ts_), _flatten_DataFrame(E_dl_val_ts_), _flatten_DataFrame(MV_dl_val_ts_)], axis = 1))
 
-_save_dict([sigmas_, lambdas_], path_to_mdl, file_name = '{}-{}-{}_e{}.pkl'.format(resource, sl_method, dl_method, score, i_exp))
+_save_dict([sigmas_, lambdas_], path_to_mdl, file_name = '{}-{}-{}_e{}.pkl'.format(resource, sl_method, dl_method, i_exp))
 
 _combine_parallel_results(comm, pd.concat(R_dl_val_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'val-{}-{}-{}.csv'.format(resource, sl_method, dl_method))

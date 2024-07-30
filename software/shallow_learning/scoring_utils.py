@@ -115,13 +115,14 @@ def _ES_temporal(Y_, Y_hat_):
 
 # Varify samples within a confidence interval
 def _verify_confidence_intervals(Y_, M_, S2_, z = 1.96):
+    print(Y_.shape, M_.shape, S2_.shape)
     N_in = 0.
     for i_zone in range(M_.shape[1]):
         for i_hour in range(M_.shape[2]):
             y_    = Y_[:, i_zone, i_hour]
-            mu    = M_[:, i_zone, i_hour]
-            std   = np.sqrt(S2_[:, i_zone, i_hour])
-            idx_  = (y_ >= (mu - z*std)) & (y_ <= (mu + z*std))
+            mu_   = M_[:, i_zone, i_hour]
+            s2_   = np.sqrt(S2_[:, i_zone, i_hour])
+            idx_  = (y_ >= (mu_ - z*s2_)) & (y_ <= (mu_ + z*s2_))
             N_in += idx_.sum()
     return N_in/(Y_.shape[0]*Y_.shape[1]*Y_.shape[2])
 
@@ -300,6 +301,7 @@ def _multivariate_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
 
 # Probabilistic multivariate forecat metrics
 def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
+    
     LogS  = 0.
     VS    = 0.
     ES    = 0.
@@ -313,23 +315,26 @@ def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
     CI90  = 0.
     CI80  = 0.
     CI60  = 0.
-    # Exclude solar time series from morning and evening horizons
-    # morning:   0 - 7
-    # afternoon: 8 - 15
-    # evening:  16 - 23
-    if N_tasks < 3:
-        resource_idxs_ = [[0, 1], [0], [0, 1]]
-    else:
-        resource_idxs_ = [[0, 1, 2], [0, 2], [0, 1, 2]]
-    dayzone_idxs_ = [[0, 8], [8, 16], [16, 24]]
 
     N_samples  = M_.shape[0]
     N_tasks    = M_.shape[1]
     N_horizons = M_.shape[2]
+
+    # Exclude solar time series from morning and evening horizons
+    # morning:   0 - 7
+    # afternoon: 8 - 15
+    # evening:  16 - 23
+
+    if N_tasks < 3:
+        resource_idxs_ = [[0], [0, 1], [0]]
+    else:
+        resource_idxs_ = [[0, 2], [0, 1, 2], [0, 2]]
+    dayzone_idxs_ = [[0, 10], [10, 14], [14, 24]]
+
     for i in range(3):
         dayzone_idx_  = dayzone_idxs_[i]
         resource_idx_ = resource_idxs_[i]
-        
+
         Y_p_     = Y_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
         M_p_     = M_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
         Cov_p_   = Cov_[..., resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
@@ -358,7 +363,7 @@ def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
     VS    /= N_samples*N_tasks*N_horizons
     ES    /= N_samples*N_tasks*N_horizons
     IS975 /= N_samples*N_tasks*N_horizons
-    CI95  /= N_samples*N_tasks*N_horizons
+    IS95  /= N_samples*N_tasks*N_horizons
     IS90  /= N_samples*N_tasks*N_horizons
     IS80  /= N_samples*N_tasks*N_horizons
     IS60  /= N_samples*N_tasks*N_horizons
