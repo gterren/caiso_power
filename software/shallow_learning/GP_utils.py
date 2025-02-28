@@ -298,7 +298,7 @@ def _GPR_fit(X_, y_, g_, param_):
         return _model, _like, end_nmll
 
     kernel, degree, hrzn, max_iter, n_init, early_stop, key = param_
-    print(kernel, degree, hrzn, max_iter, n_init, early_stop, key)
+    #print(kernel, degree, hrzn, max_iter, n_init, early_stop, key)
     # Storage Variables Initialization
     model_ = []
     nmll_  = []

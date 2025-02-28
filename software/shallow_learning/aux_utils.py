@@ -39,21 +39,21 @@ def _experiments(lists_):
     return list(itertools.product(*lists_))
 
 # Get the experiments index to run in this job
-def _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
-    N_exps           = len(exps_)
-    N_exps_per_batch = math.ceil(N_exps/N_batches)
-    N_exps_per_job   = math.ceil(N_exps_per_batch/N_jobs)
-    # Random perdumations in the experiments index list for each batch
-    #idx_exp_           = np.random.RandomState(seed = 0).permutation(N_exps)
-    #idx_exps_in_batch_ = [np.random.permutation(N_exps)[i*N_exps_per_batch:(i + 1)*N_exps_per_batch] for i in range(N_batches)][i_batch]
-    # Get experiment indexes in Batch
+def _random_experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
     np.random.seed(0)
-    #idx_exps_ = np.arange(N_exps, dtype = int)
-    idx_exps_ = np.random.permutation(N_exps)
-    print(idx_exps_)
-    idx_exps_in_batch_ = [idx_exps_[i*N_exps_per_batch:(i + 1)*N_exps_per_batch] for i in range(N_batches)][i_batch]
+    # Random perdumations in the experiments index list for each batch
+    idx_exps_          = list(np.random.permutation(len(exps_)))
+    idx_exps_in_batch_ = list(np.array_split(idx_exps_, N_batches)[i_batch])
     # Get experiment indexes in Job
-    idx_exps_in_job_   = [idx_exps_in_batch_[i*N_exps_per_job:(i + 1)*N_exps_per_job] for i in range(N_jobs)][i_job]
+    idx_exps_in_job_ = list(np.array_split(idx_exps_in_batch_, N_jobs)[i_job])
+    return idx_exps_in_job_
+
+# Get the experiments index to run in this job
+def _experiments_index_batch_job(exps_, i_batch, N_batches, i_job, N_jobs):
+    # Get experiment indexes in Job
+    idx_exps_          = np.linspace(0, len(exps_) - 1, len(exps_), dtype = int)
+    idx_exps_in_batch_ = list(np.array_split(idx_exps_, N_batches)[i_batch])
+    idx_exps_in_job_   = list(np.array_split(idx_exps_in_batch_, N_jobs)[i_job])
     return idx_exps_in_job_
 
 # Save in the next row of a .csv file
@@ -99,5 +99,6 @@ __all__ = ['_experiments',
            '_get_node_info',
            '_combine_parallel_results',
            '_experiments_index_batch_job',
+           '_random_experiments_index_batch_job',
            '_flatten_DataFrame',
            '_save_dict']

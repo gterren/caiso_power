@@ -182,15 +182,15 @@ for i_exp in i_exps_:
     #print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
 
 
-# Fit multitask dense learning - Bayesian model chain
-models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL)
+    # Fit multitask dense learning - Bayesian model chain
+    models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, i_theta, RC, DL)
 
-# Make multitask probabilistic prediction
-Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_ = _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
+    # Make multitask probabilistic prediction
+    Y_dl_ts_hat_, M_dl_ts_hat_, S2_dl_ts_hat_ = _multitask_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
 
-# Make multitask joint probabilistic prediction
-Y_dl_ts_joint_hat_ = _multitask_joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
-                                                   thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
+    # Make multitask joint probabilistic prediction
+    Y_dl_ts_joint_hat_ = _multitask_joint_prob_predict(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_,
+                                                       thetas_, i_theta_, RC, DL, y_dl_stnd, N_samples = 100)
 
     # Fit sense learning - Bayesian model chain
     t_dl_tr = time.time()

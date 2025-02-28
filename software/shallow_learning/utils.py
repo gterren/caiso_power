@@ -376,7 +376,7 @@ def _dense_learning_recursive_dataset(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, tsk 
     return X_rc_, Y_[..., hrzn], g_rc_
 
 # Get combination of possible parameters
-def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, sl, dl):
+def _get_cv_param(alphas_, nus_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, sl, dl):
     thetas_ = []
     # Lasso parameters
     if sl == 0:
@@ -386,7 +386,7 @@ def _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kapp
         thetas_.append(list(betas_))
     # Elastic Net parameters
     if sl == 2:
-        thetas_.append(list(alphas_))
+        thetas_.append(list(nus_))
         thetas_.append(list(omegas_))
     # Group lasso parameters
     if sl == 3:
@@ -464,9 +464,9 @@ def _RelevanceVectorMachine(X_, Y_, g_, threshold_lambda, max_iter = 1000):
 #     if GP == 'sklearn':  return _skGPR_fit(X_, y_, g_, params_)
 
 # Gassuain Process for Regression
-def _GaussianProcess(X_, Y_, g_, hrzn, xi, max_iter   = 1000,
+def _GaussianProcess(X_, Y_, g_, hrzn, xi, max_iter   = 250,
                                            n_init     = 5,
-                                           early_stop = 5,
+                                           early_stop = 10,
                                            key        = ''):
     # Model hyperparameter configurations
     kernels_ = ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ',
@@ -584,41 +584,6 @@ def _dense_learning_recursive_prediction(X_, Y_, Y_hat_, g_, W_hat_, RC, hrzn, t
         #print(Y_.shape, X_.shape, X_rc_.shape, g_.shape, g_rc_.shape)
     return X_rc_, Y_[..., hrzn], g_rc_
 
-# Fit dense learning - Bayesian model chain
-def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
-    print('Dense learning model training...')
-    # Initialization multi-task predictive mean
-    Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
-    models_      = []
-    # Train an expert models for each hour
-    for hrzn in range(Y_dl_tr_hat_.shape[2]):
-        model_ = []
-        # Train an expert models for nodel
-        for tsk in range(Y_dl_tr_hat_.shape[1]):
-            # Define training and testing recursive dataset
-            X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
-            print(tsk, hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
-            # Bayesian Linear Regression with Hyperprior
-            if DL == 0:
-                _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_)[0]
-            # Linear Relevance Vector Machine Regression with Hyperprior
-            if DL == 1:
-                _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, threshold_lambda = thetas_[tsk][-1])[0]
-            # Gaussian Process for Regression with Hyperprior
-            if DL == 2:
-                _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, hrzn, xi = thetas_[tsk][-1], key = key)[0]
-            if DL == 4:
-                _DL = _NaturalGradientBoostingRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, n_estimators   = thetas_[tsk][-4],
-                                                                                                                    learning_rate  = thetas_[tsk][-3],
-                                                                                                                    minibatch_frac = thetas_[tsk][-2],
-                                                                                                                    col_sample     = thetas_[tsk][-1])[0]
-            # Make prediction for recursive model
-            Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL, X_dl_tr_rc_, DL)
-            # Save Multitask models
-            model_.append(_DL)
-        # Save multihorizon models
-        models_.append(model_)
-    return models_
 
 # Fit sparse learning model
 def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, g_sl_, thetas_, sl_scaler_, SL, y_sl_stnd):
@@ -661,8 +626,45 @@ def _fit_sparse_learning(X_sl_tr_stnd_, X_sl_ts_stnd_, Y_sl_tr_stnd_, Y_sl_ts_, 
             Y_sl_ts_hat_ = sl_scaler_[1].inverse_transform(Y_sl_ts_hat_)
     return W_hat_, Y_sl_ts_hat_
 
+# Fit dense learning - Bayesian model chain
+def _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
+    print('Dense learning model training...')
+    # Initialization multi-task predictive mean
+    Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
+    models_      = []
+    # Train an expert models for each hour
+    for hrzn in range(Y_dl_tr_hat_.shape[2]):
+        model_ = []
+        # Train an expert models for nodel
+        for tsk in range(Y_dl_tr_hat_.shape[1]):
+            # Define training and testing recursive dataset
+            X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk)
+            print(tsk, hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
+            # Bayesian Linear Regression with Hyperprior
+            if DL == 0:
+                _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_)[0]
+            # Linear Relevance Vector Machine Regression with Hyperprior
+            if DL == 1:
+                _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, threshold_lambda = thetas_[tsk][-1])[0]
+            # Gaussian Process for Regression with Hyperprior
+            if DL == 2:
+                _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, hrzn, xi = thetas_[tsk][-1], key = key)[0]
+            if DL == 4:
+                _DL = _NaturalGradientBoostingRegression(X_dl_tr_rc_, Y_dl_tr_rc_[:, tsk][:, np.newaxis], g_dl_rc_, n_estimators   = thetas_[tsk][-4],
+                                                                                                                    learning_rate  = thetas_[tsk][-3],
+                                                                                                                    minibatch_frac = thetas_[tsk][-2],
+                                                                                                                    col_sample     = thetas_[tsk][-1])[0]
+            # Make prediction for recursive model
+            Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL, X_dl_tr_rc_, DL)
+            # Save Multitask models
+            model_.append(_DL)
+        # Save multihorizon models
+        models_.append(model_)
+    return models_
+
 # Fit multitask dense learning - Bayesian model chain
 def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key = ''):
+    print('Multi-task dense learning model training...')
     # Initialization multi-task predictive mean
     Y_dl_tr_hat_ = np.zeros(Y_dl_tr_.shape)
     models_      = []
@@ -671,21 +673,11 @@ def _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_
         tsk = 0
         # Define training and testing recursive dataset
         X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_ = _dense_learning_recursive_dataset(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_hat_, g_dl_, W_hat_, RC, hrzn, tsk = None)
-        print(hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
-        # Bayesian Linear Regression with Hyperprior
-        if DL == 0: _DL = _BayesianLinearRegression(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_)
-        # Linear Relevance Vector Machine Regression with Hyperprior
-        if DL == 1: _DL = _RelevanceVectorMachine(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, threshold_lambda = thetas_[tsk][-1])
-        # Gaussian Process for Regression with Hyperprior
-        if DL == 2: _DL = _GaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, hrzn, xi = thetas_[tsk][-1], key = key)
+        #print(hrzn, X_dl_tr_rc_.shape, Y_dl_tr_rc_.shape, g_dl_rc_.shape)
         # Multi-Task Gaussian Process for Regression with Hyperprior
-        if DL == 3: _DL = _MultiTaskGaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, xi = thetas_[tsk][-1])
-
-        if DL != 3:
-            for tsk in range(Y_dl_tr_hat_.shape[1]):
-                Y_dl_tr_hat_[..., tsk, hrzn] = _dense_learning_predict_recursive(_DL[tsk], X_dl_tr_rc_, DL)
-        else:
-            Y_dl_tr_hat_[..., hrzn], _ = _dense_learning_multitask_predict(_DL, X_dl_tr_rc_, DL)
+        _DL = _MultiTaskGaussianProcess(X_dl_tr_rc_, Y_dl_tr_rc_, g_dl_rc_, xi = thetas_[tsk][-1])
+        # Make prediction for multi-task recursive model
+        Y_dl_tr_hat_[..., hrzn], _ = _dense_learning_multitask_predict(_DL, X_dl_tr_rc_, DL)
         models_.append(_DL)
 
     return models_

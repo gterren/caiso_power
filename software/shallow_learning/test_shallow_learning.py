@@ -10,11 +10,12 @@ from aux_utils import *
 
 # MPI job variables
 i_job, N_jobs, comm = _get_node_info()
-
+#i_job  = 0
+#N_jobs = 1
 # Degine path to data
 path_to_prc = r"/home/gterren/caiso_power/data/processed/"
 path_to_aux = r"/home/gterren/caiso_power/data/auxiliary/"
-path_to_rst = r"/home/gterren/caiso_power/results/GPR/"
+path_to_rst = r"/home/gterren/caiso_power/results/"
 
 # Notes:
 # SL = 0: X = {0, 1}, Y = {0}
@@ -66,6 +67,7 @@ print(resource, dataset)
 # Define identification experiment key
 i_batch   = int(sys.argv[4])
 N_batches = 1
+
 # Sparse learning model standardization
 x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
                         [[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
@@ -75,21 +77,23 @@ x_sl_stnd, y_sl_stnd = [[[1, 1],[0, 1],[1, 1],[1, 1],[1, 1]][DL],
 # Dense learning model standardization
 x_dl_stnd, y_dl_stnd = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]][DL]
 # Sparse and dense learning hyper-parameters
-alphas_  = [0.00001, 0.001, 0.01, 0.1, 1., 10.]
-betas_   = [10, 20, 40, 80, 160, 320]
-omegas_  = [0.01, 0.25, 0.5, 0.75]
-gammas_  = [0.1, 1., 10.]
-etas_    = [0.25, 0.5, 0.75, 1.]
-lambdas_ = [1., 10., 100., 1000.]
-#xis_     = [0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
-xis_     = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
+alphas_ = [5e-4, 1e-4, 5e-3, 1e-3, 1e-2, 5e-2, 1e-1]
+nus_    = [1e-4, 1e-3, 1e-2, 1e-1, 1.]
+betas_  = [10, 20, 40, 80, 160, 320, 640]
+omegas_ = [0.01, 0.25, 0.5, 0.75]
+if R == 0: gammas_ = [0.1, 1., 10.]
+if R == 1: gammas_ = [1., 10., 100.]
+if R == 2: gammas_ = [0.01, 0.1, 1.]
+etas_     = [0.25, 0.5, 0.75, 1.]
+lambdas_  = [1., 10., 100., 1000.]
+xis_      = [0, 1, 4, 5, 6, 7] # ['linear', 'RBF', 'poly', 'poly', 'matern', 'matern', 'matern', 'RQ']
 kappas_1_ = [25, 50, 100, 200]
 kappas_2_ = [0.1, 0.05]
 kappas_3_ = [.4, .5, .6]
 kappas_4_ = [.1, .2, .3, .4, .5]
 kappas_   = [kappas_1_, kappas_2_, kappas_3_, kappas_4_]
 # Get combination of possible parameters
-exp_, N_thetas = _get_cv_param(alphas_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, SL, DL)
+exp_, N_thetas = _get_cv_param(alphas_, nus_, betas_, omegas_, gammas_, etas_, lambdas_, xis_, kappas_, SL, DL)
 i_exps_        = _experiments_index_batch_job(exp_, i_batch, N_batches, i_job, N_jobs)
 print(i_exps_, len(i_exps_), len(exp_), N_thetas)
 
@@ -98,6 +102,18 @@ M_ = _load_spatial_masks(i_resources_, path_to_aux)
 
 # Loading preprocessed (filtered) dataset
 X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_ = _load_processed_dataset(dataset, path_to_prc)
+# print(X_sl_.shape, Y_sl_.shape, g_sl_.shape)
+# print(X_dl_.shape, Y_dl_.shape, g_dl_.shape)
+# print(Z_.shape, ZZ_.shape, Y_ac_.shape, Y_fc_.shape)
+
+# X_sl_ = X_sl_[800:, ...]
+# Y_sl_ = Y_sl_[800:, ...]
+# X_dl_ = X_dl_[800:, ...]
+# Y_dl_ = Y_dl_[800:, ...]
+# Z_    = Z_[:, 800:, ...]
+# ZZ_   = ZZ_[:, 800:, ...]
+# Y_ac_ = Y_ac_[:, 800:, ...]
+# Y_fc_ = Y_fc_[:, 800:, ...]
 
 # Split data in training and testing
 X_sl_tr_, X_sl_ts_ = _training_and_testing_dataset(X_sl_)
@@ -147,7 +163,6 @@ X_sl_ts_, Y_sl_ts_ = _sparse_learning_dataset_format(X_sl_ts_, Y_sl_ts_)
 R_dl_ts_ = []
 
 for i_exp in i_exps_:
-    print(i_exp)
     # Initialize constants
     theta_  = exp_[i_exp]
     thetas_ = [theta_, theta_, theta_]
@@ -170,24 +185,43 @@ for i_exp in i_exps_:
 
     # Fit sense learning - Bayesian model chain
     t_dl_tr = time.time()
-    models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key)
+    if DL != 3:
+        models_ = _fit_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key)
+    else:
+        models_ = _fit_multitask_dense_learning(X_dl_tr_stnd_, Y_dl_tr_stnd_, Y_dl_tr_, W_hat_, g_dl_, thetas_, RC, DL, key)
     t_dl_tr = time.time() - t_dl_tr
 
     # Independent prediction with conficence intervals
-    t_ts                                      = time.time()
-    M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
-    t_ts                                      = time.time() - t_ts
+    t_ts = time.time()
+    if DL != 3:
+        M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+    else:
+        M_dl_ts_hat_, S2_dl_ts_hat_, C_dl_ts_hat_ = _multitask_pred_prob_dist(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd)
+    t_ts = time.time() - t_ts
     #print(M_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, C_dl_ts_hat_.shape)
 
     # Joint probabilistic predictions
-    t_prob_ts    = time.time()
-    Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 250)
-    t_prob_ts    = time.time() - t_prob_ts
+    t_prob_ts = time.time()
+    if DL != 3:
+        Y_dl_ts_hat_ = _joint_prob_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
+    else:
+        Y_dl_ts_hat_ = _multitask_joint_prediction(models_, dl_scaler_, X_dl_ts_stnd_, Y_dl_ts_, W_hat_, g_dl_, RC, DL, y_dl_stnd, N_samples = 100)
+    t_prob_ts = time.time() - t_prob_ts
 
     # Testing scores
     E_dl_ts_  = _baseline_det_metrics(Y_dl_ts_, M_dl_ts_hat_)
     P_dl_ts_  = _prob_metrics(Y_dl_ts_, M_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
-    MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, Y_dl_ts_hat_)
+    if R == 1:
+        # print(Y_dl_ts_.shape, M_dl_ts_hat_.shape, C_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, Y_dl_ts_hat_.shape)
+        # Y_dl_ts_      = Y_dl_ts_[..., 8:-8]
+        # M_dl_ts_hat_  = M_dl_ts_hat_[..., 8:-8]
+        # C_dl_ts_hat_  = C_dl_ts_hat_[..., 8:-8]
+        # S2_dl_ts_hat_ = S2_dl_ts_hat_[..., 8:-8]
+        # Y_dl_ts_hat_  = Y_dl_ts_hat_[..., 8:-8, :]
+        print(Y_dl_ts_.shape, M_dl_ts_hat_.shape, C_dl_ts_hat_.shape, S2_dl_ts_hat_.shape, Y_dl_ts_hat_.shape)
+        MV_dl_ts_     = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
+    else:
+        MV_dl_ts_ = _multivariate_prob_metrics(Y_dl_ts_, M_dl_ts_hat_, C_dl_ts_hat_, S2_dl_ts_hat_, Y_dl_ts_hat_)
 
     N_feaures_ = [(W_hat_[:, tsk] != 0.).sum() for tsk in range(W_hat_.shape[1])]
     N_feaures  = int(np.sum(N_feaures_))
@@ -213,5 +247,4 @@ for i_exp in i_exps_:
                                _flatten_DataFrame(P_dl_ts_),
                                _flatten_DataFrame(E_dl_ts_),
                                _flatten_DataFrame(MV_dl_ts_)], axis = 1))
-
-_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}.csv'.format(resource, sl_method, dl_method))
+_combine_parallel_results(comm, pd.concat(R_dl_ts_, axis = 0), i_job, N_jobs, path_to_rst, file_name = 'test-{}-{}-{}_v3.csv'.format(resource, sl_method, dl_method))

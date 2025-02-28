@@ -21,7 +21,7 @@ def _extrapolate_wind(M_10_, M_80_):
     return M_60_, M_100_, M_120_
 
 def _periodic(x_, period):
-    return np.cos(2.*np.pi*x_/period)
+    return 0.5 - (0.5*np.cos(2.*np.pi*x_/period))
 
 # Load data in a compressed file
 def _load_data_in_chunks(years_, path):
@@ -112,11 +112,11 @@ def _multisource_structure_dataset(data_, i_resources_, i_assets_, F_idx_, tau, 
     x_idx_ = sorted(list(set(chain.from_iterable(x_all_idx_))))
     y_idx_ = sorted(list(set(chain.from_iterable(y_all_idx_))))
     z_idx_ = sorted(list(set(chain.from_iterable(z_all_idx_))))
-    print(v_idx_)
-    print(w_idx_)
-    print(x_idx_)
-    print(y_idx_)
-    print(z_idx_)
+    # print(v_idx_)
+    # print(w_idx_)
+    # print(x_idx_)
+    # print(y_idx_)
+    # print(z_idx_)
     # Concatenate all chucks of data in matrix form
     V_, W_, X_, Y_, Z_, ZZ_ = [], [], [], [], [], []
     for i in range(len(data_)):
