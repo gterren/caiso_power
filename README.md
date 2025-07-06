@@ -1,4 +1,4 @@
-# caiso_power
+# Joint Day-ahead Probabilistic Forecast
 
 conda install -c anaconda numpy pandas scipy scikit-learn 
 
