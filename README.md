@@ -1,4 +1,4 @@
-# Joint Day-ahead Probabilistic Forecast
+# Joint Day-Ahead Probabilistic Forecast
 
 conda install -c anaconda numpy pandas scipy scikit-learn 
 
