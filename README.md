@@ -1,9 +1,11 @@
-# Joint Day-Ahead Probabilistic Forecast
+# Joint Day-Ahead Probabilistic Ebergy Forecast
 
-conda install -c anaconda numpy pandas scipy scikit-learn 
 
-conda install scikit-learn-intelex
+Requierments 
+``conda install -c anaconda numpy pandas scipy scikit-learn`` 
 
-conda install -c conda-forge properscoring blosc mpi4py
+``conda install scikit-learn-intelex``
 
-pip install group-lasso
+``conda install -c conda-forge properscoring blosc mpi4py``
+
+``pip install group-lasso``
