@@ -6,7 +6,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 * **Joint probabilistic forecasts:** Simultaneously model electricity demand, solar, and wind generation using joint probability distributions.
 * **Sparse + Bayesian learning:** Combines four sparse learning techniques for feature selection and four Bayesian uncertainty quantification methods.
 * **Model evaluation framework:** Rigorously assesses model combinations via proper scoring rules.
-* **CAISO-specific zones:** Supports the three CAISO trading hubs (NP15, SP15, ZP26) and utilities (PG&E, SCE, SDW&G) with ~25% forecasting accuracy improvement.
+* **CAISO-specific zones:** Supports the three CAISO trading hubs (NP15, SP15, ZP26) and the three major utilities (PG&E, SCE, SDG&E), and produces a ~25% forecasting accuracy improvement.
 * **Reserve allocation tool:** Uses forecast confidence intervals to optimize operating reserve levels beyond deterministic forecasts.
 
 ## Required packages
