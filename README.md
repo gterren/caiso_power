@@ -22,6 +22,8 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ## Code description
 
+**aux_utils.py** contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
+
 
 ## Reference
 
