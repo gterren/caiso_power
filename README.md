@@ -1,7 +1,9 @@
-# Joint Day-Ahead Probabilistic Ebergy Forecast
+# Joint Day-Ahead Probabilistic Energy Forecast
 
 
-Requierments 
+Requiered packages:
+
+
 ``conda install -c anaconda numpy pandas scipy scikit-learn`` 
 
 ``conda install scikit-learn-intelex``
