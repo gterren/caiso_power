@@ -1,6 +1,6 @@
 # Joint Day-Ahead Probabilistic Energy Forecast
 
-A robust, scalable library for probabilistic day-ahead forecasting of electricity demand and renewable (solar & wind) generation in CAISO trading hubs and major utilities — leveraging publicly available weather data and machine learning methods. It also facilitates system-level joint uncertainty analysis and operating reserve planning.
+A robust, scalable library for probabilistic day-ahead forecasting of electricity demand and renewable (solar & wind) generation in CAISO trading hubs and major utilities — leveraging publicly available weather data and machine learning methods. It also facilitates system-level joint uncertainty analysis, multi-resource node-level joint uncertainty analysis, and operating reserve planning.
 
 ### Key Features:
 
