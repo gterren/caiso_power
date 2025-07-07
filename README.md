@@ -2,7 +2,8 @@
 
 A robust, scalable library for probabilistic day-ahead forecasting of electricity demand and renewable (solar & wind) generation in CAISO trading hubs and major utilities — leveraging publicly available weather data and machine learning methods. It also facilitates system-level joint uncertainty analysis and operating reserve planning.
 
-### Key Features
+### Key Features:
+
 * **Joint probabilistic forecasts:** Simultaneously model electricity demand, solar, and wind generation using joint probability distributions.
 * **Sparse + Bayesian learning:** Combines four sparse learning techniques for feature selection and four Bayesian uncertainty quantification methods.
 * **Model evaluation framework:** Rigorously assesses model combinations via proper scoring rules.
