@@ -11,7 +11,7 @@
 
 ``pip install group-lasso``
 
-## Scripts
+## Codes description
 
 
 ## Reference
