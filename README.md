@@ -13,10 +13,6 @@ Required packages:
 
 ## Reference
 
-The manuscript is currently undergoing revisions in Nature Communications.
-
-The draft is publicly available at ``https://www.researchsquare.com/article/rs-5891000/v1''
-
-The suggested reference is: 
+The manuscript is currently undergoing revisions in Nature Communications. The draft is publicly available (https://www.researchsquare.com/article/rs-5891000/v1). We recommend to use the following reference:
 Terrén-Serrano, Guillermo, Ranjit Deshmukh, and Manel Martínez-Ramón. "Joint Probabilistic Day-Ahead Energy Forecast for Power System Operations." (2025).
 
