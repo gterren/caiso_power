@@ -1,7 +1,7 @@
 # Joint Day-Ahead Probabilistic Energy Forecast
 
 
-Required packages:
+## Required packages
 
 ``conda install -c anaconda numpy pandas scipy scikit-learn`` 
 
