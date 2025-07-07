@@ -1,8 +1,7 @@
 # Joint Day-Ahead Probabilistic Energy Forecast
 
 
-Requiered packages:
-
+Required packages:
 
 ``conda install -c anaconda numpy pandas scipy scikit-learn`` 
 
@@ -11,3 +10,6 @@ Requiered packages:
 ``conda install -c conda-forge properscoring blosc mpi4py``
 
 ``pip install group-lasso``
+
+## Reference
+
