@@ -25,9 +25,8 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 ### Main
 
 * ``val_shallow_learning.py`` cross-validates the hyperparameters in the proposed two-stage machine learning pipeline and saves the validation proper scoring rules for model selection.
-* ``test_multitask_shallow_learning.py``
-* ``test_shallow_learning.py``
-* ``model_shallow_learning.py`` trains the proposed two-stage machine learning pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios for each testing day, evaluates its performance and the performances of the baselines, and saves the results.
+* ``test_shallow_learning.py`` tests the proposed two-stage machine learning pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios, evaluates its performance and the performances of the baselines, and saves the testing-only results.
+* ``model_shallow_learning.py`` trains the proposed two-stage machine learning pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios for each testing day, and saves them.
 
 ### Functionalities
 
