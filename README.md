@@ -26,12 +26,12 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 * ``test_multitask_shallow_learning.py``
 * ``test_shallow_learning.py``
 * ``scoring_utils.py``
-* ``model_shallow_learning.py``
+* ``model_shallow_learning.py`` trains the proposed two-stage machine learning pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios for each testing day, evaluates its performance and the performances of the baselines, and saves the results.
 
 ### Functionalities
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models. It includes:
-  + xxx
+  + **Sparse Learning Models**
   + xxx
   
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
