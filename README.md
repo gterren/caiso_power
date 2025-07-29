@@ -33,8 +33,8 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 ### Functionalities
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models. It includes:
-  + **Sparse Learning Models** feature selection function calls using the realized weather features.
-  + **Dense Learning Models** recursive Bayesian chains function calls using the features selected by sparse models and the forecasted weather features.
+  + **Sparse Learning Models** feature selection function calls based on realized weather features (Lasso, OMP, Elastic Net, and Group Lasso).
+  + **Dense Learning Models** recursive Bayesian chains function calls using the features selected by sparse models and the forecasted weather features (BLR, RVM, GPR, and MT-GPR).
   + **Reboust Recursive Predictive distributions** function calls for a multihorizon forecast recursively using previous predictions as inputs (similar to seq2seq models), ensuring robust predictive covariance matrix inversion.
   
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
@@ -50,7 +50,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
   + **Single-task GPR** function calls using ``GPyTorch`` and ``Scikit-learn``.
   + **Multi-task GPR (MT-GPR)** function calls using ``GPyTorch`` with support for various kernels and recursive prediction.
   + **Cool-MTGPR** variants function calls (including hierarchical and approximate models).
-  + **Prediction functions** calls for both standard and multitask GP settings.
+  + **Prediction functions** call for both standard and multitask GP settings.
     
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
   + **Classical error metrics** functions (RMSE, MAE, MBE).
