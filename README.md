@@ -22,18 +22,19 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ## Code description
 
-* ``val_shallow_learning.py''
-* ``test_multitask_shallow_learning.py''
-* ``test_shallow_learning.py''
-* ``scoring_utils.py''
-* ``model_shallow_learning.py''
+* ``val_shallow_learning.py``
+* ``test_multitask_shallow_learning.py``
+* ``test_shallow_learning.py``
+* ``scoring_utils.py``
+* ``model_shallow_learning.py``
 
 ### Functionalities
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models.
+  
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
-  + Data Loading to load compressed ``.dat`` files containing weather and system variables, spatial masks (e.g., land use or resource density) for feature filtering or selection.
-  + Feature Engineering to extrapolate wind speeds at multiple altitudes (60, 100, 120m) from measured values at 10m and 80m and periodic time encoding (month, hour, etc.) using a cosine transform.
+  + **Data Loading** to load compressed ``.dat`` files containing weather and system variables, spatial masks (e.g., land use or resource density) for feature filtering or selection.
+  + **Feature Engineering** to extrapolate wind speeds at multiple altitudes (60, 100, 120m) from measured values at 10m and 80m and periodic time encoding (month, hour, etc.) using a cosine transform.
   + **Dataset Structuring** to combine selected data streams (e.g., demand, solar, wind, forecasts) into unified 3D tensors for modeling.
   + **Model Input Formatting** to flatten 3D tensor data into 2D feature/target arrays for sparse models, and build the 3D arrays for kernel models.
   + **Standardization** to normalize features and target variables.
@@ -47,9 +48,9 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
   + **Prediction functions** for both standard and multitask GP settings.
     
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
-  + Classical deterministic error metrics (RMSE, MAE, MBE).
-  + Probabilistic scores (CRPS, LogS, Energy Score, Variogram Score) --- Multivariate aggregation and breakdown by tasks/zones.
-  + Interval-based scores (Interval Score, Confidence Interval Coverage).
+  + **Classical error metrics** (RMSE, MAE, MBE).
+  + **Proper scoring rules** (CRPS, LogS, Energy Score, Variogram Score, Interval Score) --- Multivariate aggregation and breakdown by tasks/zones.
+  + **Coverage scores** (Confidence Interval Coverage).
     
 * ``aux_utils.py`` contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
 
