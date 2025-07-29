@@ -32,8 +32,8 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models. It includes:
   + **Sparse Learning Models** feature selection function calls using the realized weather features.
-  + **Dense Learning Models** trains recursive Bayesian chains function calls using the features selected by sparse models and the forecasted weather features.
-  + **Reboust Recursive Predictive distributions** multihorizon forecasts recursively using previous predictions as inputs (similar to seq2seq models), ensuring covariance matrix inversion.
+  + **Dense Learning Models** recursive Bayesian chains function calls using the features selected by sparse models and the forecasted weather features.
+  + **Reboust Recursive Predictive distributions** function calls for a multihorizon forecast recursively using previous predictions as inputs (similar to seq2seq models), ensuring robust predictive covariance matrix inversion.
   
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
   + **Data Loading** to load compressed ``.dat`` files containing weather and system variables, spatial masks (e.g., land use or resource density) for feature filtering or selection.
