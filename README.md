@@ -26,7 +26,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ### Main
 
-* ``preprocessing.py`` 
+* ``preprocessing.py`` prepares and generates a sparse and dense learning dataset for multi-resource forecast (load, solar, wind), using spatial masks and various temporal features. 
 
 **Forecasting system-level demand, solar, and wind generation independently or jointly.**
 
