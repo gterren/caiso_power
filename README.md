@@ -20,7 +20,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ``pip install group-lasso``
 
-``git get https://github.com/OGHinde/Cool_MTGP.git`` to install **Cool MT-GPR** from the GitHub repository (``https://github.com/OGHinde/Cool_MTGP``) in the code's main folder (``shallow_learning``). We only need the ``lib`` folder.
+``git clone https://github.com/OGHinde/Cool_MTGP.git`` to install **Cool MT-GPR** from the GitHub repository (``https://github.com/OGHinde/Cool_MTGP``) in the code's main folder (``shallow_learning``). We only need the ``lib`` folder.
 
 ## Code description
 
