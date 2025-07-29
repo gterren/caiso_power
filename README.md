@@ -34,7 +34,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 * ``test_shallow_learning_batch.py`` tests the proposed two-stage ML pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios, evaluates its performance and the performances of the baselines, and saves the testing-only results.
 * ``model_shallow_learning.py`` trains the proposed two-stage ML pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios for each testing day, and saves them.
 
-**``Multisource`` refers to forecasting node-level joint demand, solar, and wind generation (MT-GPR only).**
+**``Multisource`` refers to the codes with experiments for forecasting node-level joint demand, solar, and wind generation (MT-GPR only).**
 
 * ``val_multisource_shallow_learning.py``
 * ``test_multisource_shallow_learning.py`` 
