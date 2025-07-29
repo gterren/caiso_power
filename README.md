@@ -31,14 +31,25 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 ### Functionalities
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models.
-* ``loading_utils.py`` data preprocessing and modeling pipeline. It includes:
-  + **Data Loading:**
-  + **Feature Engineering:** ``_extrapolate_wind`` wind speeds extrapolation at multiple altitudes (60, 100, 120m) from measured values at 10m and 80m. ``_periodic`` encodes periodic time features (month, hour, etc.) using a cosine transform.
-  + **Dataset Structuring:** ``_multisource_structure_dataset`` combines selected data streams (e.g., demand, solar, wind, forecasts) into unified 3D tensors for modeling.
-  + **Model Input Formatting:** ``_sparse_learning_dataset_format`` flattens 3D tensor data into 2D feature/target arrays for sparse models, and ``_dense_learning_dataset`` builds the 3D arrays for kernel models.
-  + **Standardization:** ``_dense_learning_stand`` and ``_sparse_learning_stand`` to normalize feature and target variables.
-  + **Train/Test Splits:** ``_training_and_testing_dataset`` to split structured data into training and test sets.
-  + **I/O Utilities:** ``_generate_dataset`` saves all preprocessed data into a single pickle file, and ``_load_processed_dataset`` loads the saved file for training. ``_load_spatial_masks`` loads spatial masks (e.g., land use or resource density) for feature filtering or selection.
+* ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
+  + **I/O Utilities:**
+    - ``_load_data_in_chunks`` Loads compressed .dat files containing weather and system variables.
+    - ``_load_spatial_masks`` loads spatial masks (e.g., land use or resource density) for feature filtering or selection.
+    - ``_generate_dataset`` saves all preprocessed data into a single pickle file.
+    - ``_load_processed_dataset`` loads the saved preprocessed data pickle file for training.
+  + **Feature Engineering:**
+    - ``_extrapolate_wind`` wind speeds extrapolation at multiple altitudes (60, 100, 120m) from measured values at 10m and 80m.
+    - ``_periodic`` encodes periodic time features (month, hour, etc.) using a cosine transform.
+  + **Dataset Structuring:**
+    - ``_multisource_structure_dataset`` combines selected data streams (e.g., demand, solar, wind, forecasts) into unified 3D tensors for modeling.
+  + **Model Input Formatting:**
+    - ``_sparse_learning_dataset_format`` flattens 3D tensor data into 2D feature/target arrays for sparse models.
+    - ``_dense_learning_dataset`` builds the 3D arrays for kernel models.
+  + **Standardization:**
+    - ``_dense_learning_stand`` and ``_sparse_learning_stand`` to normalize feature and target variables.
+  + **Train/Test Splits:**
+    - ``_training_and_testing_dataset`` to split structured data into training and test sets.
+
 
 * ``GP_utils.py`` contains the functions of the different implemented versions of Gaussian Process Regression (GPR) models. It includes:
   + Single-task GP using ``GPyTorch`` and ``Scikit-learn``.
