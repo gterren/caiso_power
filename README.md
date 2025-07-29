@@ -50,7 +50,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
   + **Single-task GPR** function calls using ``GPyTorch`` and ``Scikit-learn``.
   + **Multi-task GPR (MT-GPR)** function calls using ``GPyTorch`` with support for various kernels and recursive prediction.
   + **Cool-MTGPR** variants function calls (including hierarchical and approximate models).
-  + **Prediction functions** function calls for both standard and multitask GP settings.
+  + **Prediction functions** calls for both standard and multitask GP settings.
     
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
   + **Classical error metrics** functions (RMSE, MAE, MBE).
