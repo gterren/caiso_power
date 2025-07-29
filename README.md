@@ -30,7 +30,9 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ### Functionalities
 
-* ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models.
+* ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models. It includes:
+  + xxx
+  + xxx
   
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
   + **Data Loading** to load compressed ``.dat`` files containing weather and system variables, spatial masks (e.g., land use or resource density) for feature filtering or selection.
