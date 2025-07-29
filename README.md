@@ -22,7 +22,28 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ## Code description
 
-**aux_utils.py** contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
+
+
+* ``val_shallow_learning.py''
+* ``test_multitask_shallow_learning.py''
+* ``test_shallow_learning.py''
+* ``scoring_utils.py''
+* ``model_shallow_learning.py''
+
+### Functionalities
+
+* ``utils.py'' this functions with multiple versions of Gaussian Process Regression (GPR) models.
+
+* ``GP_utils.py'' contains the functions of the different implemented versions of Gaussian Process Regression (GPR) models.
+
+``scoring_utils.py'' contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
+
+* Classical deterministic error metrics (RMSE, MAE, MBE).
+* Probabilistic scores (CRPS, LogS, Energy Score, Variogram Score) --- Multivariate aggregation and breakdown by tasks/zones.
+* Interval-based scores (Interval Score, Confidence Interval Coverage).
+
+  
+* ``aux_utils.py'' contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
 
 
 ## Reference
