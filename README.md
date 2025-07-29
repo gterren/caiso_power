@@ -34,11 +34,11 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 * ``test_shallow_learning_batch.py`` tests the proposed two-stage ML pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios, evaluates its performance and the performances of the baselines, and saves the testing-only results.
 * ``model_shallow_learning.py`` trains the proposed two-stage ML pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, draws predictive scenarios for each testing day, and saves them.
 
-**``Multisource`` refers to the codes with experiments for forecasting node-level joint demand, solar, and wind generation (MT-GPR only).**
+**``Multisource`` refers to the codes with experiments for forecasting node-level joint demand, solar, and wind generation (node-level MT-GPR only).**
 
-* ``val_multisource_shallow_learning.py``
-* ``test_multisource_shallow_learning.py`` 
-* ``model_multisource_shallow_learning.py``
+* ``val_multisource_shallow_learning.py`` cross-validates the hyperparameters in the ``Multisource`` two-stage node-level MT-GPR pipeline, cross-validates the scenario smoothing and  predictive distribution calibration parameters, and saves the validation proper scoring rules for model selection.
+* ``test_multisource_shallow_learning.py`` tests the ``Multisource`` two-stage node-level MT-GPR pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, calibrates it, draws predictive scenarios, evaluates its performance and the performances of the baselines, and saves the testing-only results.
+* ``model_multisource_shallow_learning.py`` trains the ``Multisource`` two-stage node-level MT-GPR pipeline for a given set of hyperparameters, generates the predictive distribution from the model chain for the testing set, calibrates it, draws predictive scenarios for each testing day, and saves them (node-level MT-GPR only).
 
 ### Functionalities
 
