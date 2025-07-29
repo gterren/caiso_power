@@ -58,9 +58,9 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 Scripts in a bash to submit jobs to a high-performance computing (HPC) cluster that uses the SLURM workload manager.
 * ``drive.sh`` loops over hyperparameter configuration and submits ``.job`` files.
-* ``run.job`` submits jobs to the batch queue POD HPC parallelized with ``mpi4py``.
-* ``run_braid.job`` submit jobs to the batch queue in Braid2 HPC parallelized with ``mpi4py``.
-* ``run_largemem.job``submits jobs to CPUs in the large largemem queue in POD HPC parallelized with ``mpi4py``.
+* ``run.job`` submits jobs to POD's batch queue HPC parallelized with ``mpi4py``.
+* ``run_braid.job``submits jobs to Braid2's batch queue, parallelized with ``mpi4py``.
+* ``run_largemem.job``submits jobs to nodes in POD's large largemem queue, parallelized with ``mpi4py``.
 
 ## Reference
 
