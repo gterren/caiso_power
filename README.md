@@ -31,12 +31,19 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 ### Functionalities
 
 * ``utils.py`` this functions with multiple versions of Gaussian Process Regression (GPR) models.
-* ``GP_utils.py`` contains the functions of the different implemented versions of Gaussian Process Regression (GPR) models.It includes:
+* ``loading_utils.py`` data preprocessing and modeling pipeline. It includes:
+  + Data Loading
+  + Feature Engineering
+  + Dataset Structuring ``_multisource_structure_dataset
+  + Model Input Formatting
+  + Standardization: ``_dense_learning_stand`` and ``_sparse_learning_stand`` to Normalize feature and target variables.
+  + Train/Test Splits: ``_training_and_testing_dataset`` to split structured data into training and test sets.
+
+* ``GP_utils.py`` contains the functions of the different implemented versions of Gaussian Process Regression (GPR) models. It includes:
   + Single-task GP using GPyTorch and Scikit-learn.
   + Multitask GP (MT-GPR) using GPyTorch with support for various kernels and recursive prediction.
   + Cool-MTGP variants, including hierarchical and approximate models.
   + Custom prediction functions for both standard and multitask GP settings.
-
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
   + Classical deterministic error metrics (RMSE, MAE, MBE).
   + Probabilistic scores (CRPS, LogS, Energy Score, Variogram Score) --- Multivariate aggregation and breakdown by tasks/zones.
@@ -46,10 +53,10 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 ### SLURM files
 
 Scripts in a bash to submit jobs to a high-performance computing (HPC) cluster that uses the SLURM workload manager.
-* ``drive.sh`` loops over hyperparameter configuration to submit jobs with
-* ``run.job`` submits jobs to the batch queue POD HPC parallelized with mpi4py
-* ``run_braid.job`` submit jobs to the batch queue in Braid2 HPC parallelized with mpi4py
-* ``run_largemem.job``submits jobs to CPUs in the large largemem queue in POD HPC parallelized with mpi4py
+* ``drive.sh`` loops over hyperparameter configuration and submits the ``.job`` file.
+* ``run.job`` submits jobs to the batch queue POD HPC parallelized with ``mpi4py``.
+* ``run_braid.job`` submit jobs to the batch queue in Braid2 HPC parallelized with ``mpi4py``.
+* ``run_largemem.job``submits jobs to CPUs in the large largemem queue in POD HPC parallelized with ``mpi4py``.
 
 ## Reference
 
