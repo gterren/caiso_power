@@ -54,7 +54,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
     
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
   + **Classical error metrics** functions (RMSE, MAE, MBE).
-  + **Proper scoring rules** functions (CRPS, LogS, Energy Score, Variogram Score, Interval Score) --- Multivariate aggregation and breakdown by tasks/zones.
+  + **Proper scoring rules** functions (CRPS, Energy Score, Variogram Score, Interval Score) --- Multivariate aggregation and breakdown by tasks/zones.
   + **Coverage scores** functions (Confidence Interval Coverage).
     
 * ``aux_utils.py`` contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
@@ -63,7 +63,7 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 Scripts in a bash to submit jobs to a high-performance computing (HPC) cluster that uses the SLURM workload manager.
 * ``drive.sh`` loops over hyperparameter configuration and submits ``.job`` files.
-* ``run.job`` submits jobs to POD's batch queue HPC parallelized with ``mpi4py``.
+* ``run.job`` submits jobs to POD's batch queue, HPC parallelized with ``mpi4py``.
 * ``run_braid.job``submits jobs to Braid2's batch queue, parallelized with ``mpi4py``.
 * ``run_largemem.job``submits jobs to nodes in POD's large largemem queue, parallelized with ``mpi4py``.
 
