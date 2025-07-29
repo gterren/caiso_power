@@ -38,22 +38,22 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 * ``loading_utils.py`` data preprocessing and modeling pipeline. It includes: 
   + **Data Loading** to load compressed ``.dat`` files containing weather and system variables, spatial masks (e.g., land use or resource density) for feature filtering or selection.
   + **Feature Engineering** to extrapolate wind speeds at multiple altitudes (60, 100, 120m) from measured values at 10m and 80m and periodic time encoding (month, hour, etc.) using a cosine transform.
-  + **Dataset Structuring** to combine selected data streams (e.g., demand, solar, wind, forecasts) into unified 3D tensors for modeling.
-  + **Model Input Formatting** to flatten 3D tensor data into 2D feature/target arrays for sparse models, and build the 3D arrays for kernel models.
-  + **Standardization** to normalize features and target variables.
-  + **Train/Test Splits** to structure data into training and test sets.
-  + **I/O Utilities** to save all preprocessed data into a single pickle file and load the saved preprocessed data pickle file for training.
+  + **Dataset Structuring** function calls to combine selected data streams (e.g., demand, solar, wind, forecasts) into unified 3D tensors for modeling.
+  + **Model Input Formatting** function calls to flatten 3D tensor data into 2D feature/target arrays for sparse models, and build the 3D arrays for kernel models.
+  + **Standardization** function calls to normalize features and target variables.
+  + **Train/Test Splits** function calls to structure data into training and test sets.
+  + **I/O Utilities** function calls to save all preprocessed data into a single pickle file and load the saved preprocessed data pickle file for training.
   
 * ``GP_utils.py`` contains the functions of the different implemented versions of Gaussian Process Regression (GPR) models. It includes:
-  + **Single-task GP** using ``GPyTorch`` and ``Scikit-learn``.
-  + **Multitask GP** (MT-GPR) using ``GPyTorch`` with support for various kernels and recursive prediction.
-  + **Cool-MTGP** variants, including hierarchical and approximate models.
-  + **Prediction functions** for both standard and multitask GP settings.
+  + **Single-task GP** function calls using ``GPyTorch`` and ``Scikit-learn``.
+  + **Multitask GP (MT-GPR)** function calls using ``GPyTorch`` with support for various kernels and recursive prediction.
+  + **Cool-MTGP** variants function calls (including hierarchical and approximate models).
+  + **Prediction functions** function calls for both standard and multitask GP settings.
     
 * ``scoring_utils.py`` contains a set of metrics for evaluating deterministic and probabilistic forecasts. It includes:
-  + **Classical error metrics** (RMSE, MAE, MBE).
-  + **Proper scoring rules** (CRPS, LogS, Energy Score, Variogram Score, Interval Score) --- Multivariate aggregation and breakdown by tasks/zones.
-  + **Coverage scores** (Confidence Interval Coverage).
+  + **Classical error metrics** functions (RMSE, MAE, MBE).
+  + **Proper scoring rules** functions (CRPS, LogS, Energy Score, Variogram Score, Interval Score) --- Multivariate aggregation and breakdown by tasks/zones.
+  + **Coverage scores** functions (Confidence Interval Coverage).
     
 * ``aux_utils.py`` contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
 
