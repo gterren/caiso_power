@@ -22,8 +22,6 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
 
 ## Code description
 
-
-
 * ``val_shallow_learning.py''
 * ``test_multitask_shallow_learning.py''
 * ``test_shallow_learning.py''
@@ -45,6 +43,13 @@ A robust, scalable library for probabilistic day-ahead forecasting of electricit
   + Interval-based scores (Interval Score, Confidence Interval Coverage).
 * ``aux_utils.py`` contains the functions necessary to parallelize the code across nodes in a High-Performance Computer (HPC) and the saving functions to compile and store the dataframes with the results.
 
+### SLURM files
+
+Scripts in a bash to submit jobs to a high-performance computing (HPC) cluster that uses the SLURM workload manager.
+* ``drive.sh`` loops over hyperparameter configuration to submit jobs with
+* ``run.job`` submits jobs to the batch queue POD HPC parallelized with mpi4py
+* ``run_braid.job`` submit jobs to the batch queue in Braid2 HPC parallelized with mpi4py
+* ``run_largemem.job``submits jobs to CPUs in the large largemem queue in POD HPC parallelized with mpi4py
 
 ## Reference
 
