@@ -85,10 +85,12 @@ i_exp = int(sys.argv[3])
 N_kfolds = 5
 print(i_job, N_jobs, N_kfolds)
 
+# Two-States traning verbose active or not
+verbose = True
+
 # Calibration/Smoothing active or not
 calibration = True
 smoothing   = True
-verbose     = True
 
 # Sparse learning model standardization (SL model: 0 standaridation, 1: nostandaridation)
 # (see manuscript section Data Preprocessing
@@ -132,14 +134,11 @@ M_ = _load_spatial_masks(i_resources_, path_to_aux)
 # (see manuscript Section Processing and Filtering)
 # (see SI Section Data Processing)
 X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_ = _load_processed_dataset(dataset, path_to_prc)
-print(X_sl_.shape, Y_sl_.shape, Y_sl_.shape, X_dl_.shape, Y_dl_.shape)
 
 # Split SL dataset data in training and testing
 # (see manuscript Section Validation, Training, and Testing)
 X_sl_tr_, X_sl_ts_ = _training_and_testing_dataset(X_sl_)
 Y_sl_tr_, Y_sl_ts_ = _training_and_testing_dataset(Y_sl_)
-#print(X_sl_tr_.shape, Y_sl_tr_.shape, X_sl_ts_.shape, Y_sl_ts_.shape)
-
 # Clean unused variables from RAM memory
 del X_sl_, Y_sl_
 
@@ -147,8 +146,6 @@ del X_sl_, Y_sl_
 # (see manuscript Section Validation, Training, and Testing)
 X_dl_tr_, X_dl_ts_ = _training_and_testing_dataset(X_dl_)
 Y_dl_tr_, Y_dl_ts_ = _training_and_testing_dataset(Y_dl_)
-#print(X_dl_tr_.shape, Y_dl_tr_.shape, X_dl_ts_.shape, Y_dl_ts_.shape)
-
 # Clean unused variables from RAM memory
 del X_dl_, Y_dl_
 
@@ -156,8 +153,6 @@ del X_dl_, Y_dl_
 # (see manuscript Section AI-Based Probabilistic Models
 # Enhance the Performance of a Day-Ahead Energy Forecast)
 Y_per_fc_, Y_ca_fc_, Y_clm_fc_ = _naive_forecasts(Y_ac_, Y_fc_, N_lags)
-#print(Y_per_fc_.shape, Y_ca_fc_.shape, Y_clm_fc_.shape)
-
 # Clean unused variables from RAM memory
 del Y_ac_, Y_fc_
 
@@ -166,10 +161,6 @@ del Y_ac_, Y_fc_
 Y_per_fc_tr_, Y_per_fc_ts_ = _training_and_testing_dataset(Y_per_fc_)
 Y_ca_fc_tr_, Y_ca_fc_ts_   = _training_and_testing_dataset(Y_ca_fc_)
 Y_clm_fc_tr_, Y_clm_fc_ts_ = _training_and_testing_dataset(Y_clm_fc_)
-#print(Y_per_fc_tr_.shape, Y_per_fc_ts_.shape)
-#print(Y_ca_fc_tr_.shape, Y_ca_fc_ts_.shape)
-#print(Y_clm_fc_tr_.shape, Y_clm_fc_ts_.shape)
-
 # Clean unused variables from RAM memory
 del Y_per_fc_, Y_ca_fc_, Y_clm_fc_
 
@@ -178,15 +169,11 @@ del Y_per_fc_, Y_ca_fc_, Y_clm_fc_
 E_per_ts_ = _baseline_det_metrics(Y_dl_ts_, Y_per_fc_ts_, headers_)
 E_ca_ts_  = _baseline_det_metrics(Y_dl_ts_, Y_ca_fc_ts_, headers_)
 E_clm_ts_ = _baseline_det_metrics(Y_dl_ts_, Y_clm_fc_ts_, headers_)
-# print(E_per_ts_)
-# print(E_ca_ts_)
-# print(E_clm_ts_)
 
 # Generate sparse learning training and testing dataset in the correct format
 # (see manuscript Section Feature Vectors for Sparse Learning)
 X_sl_tr_, Y_sl_tr_ = _sparse_learning_dataset_format(X_sl_tr_, Y_sl_tr_)
 X_sl_ts_, Y_sl_ts_ = _sparse_learning_dataset_format(X_sl_ts_, Y_sl_ts_)
-#print(X_sl_tr_test_.shape, Y_sl_tr_test_.shape, X_sl_ts_test_.shape, Y_sl_ts_test_.shape)
 
 # Get hyperparameters combination in the experiment
 theta_  = exp_[i_exp]
@@ -222,7 +209,6 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
     # (see manuscript Section Validation, Training, and Testing)
     X_sl_val_tr_, X_sl_val_ts_ = X_sl_tr_[idx_tr_, ...], X_sl_tr_[idx_ts_, ...]
     Y_sl_val_tr_, Y_sl_val_ts_ = Y_sl_tr_[idx_tr_, ...], Y_sl_tr_[idx_ts_, ...]
-    #print(X_sl_val_tr_.shape, Y_sl_val_tr_.shape, X_sl_val_ts_.shape, Y_sl_val_ts_.shape)
 
     # Standardize SL dataset
     # (see manuscript section Data Preprocessing)
@@ -231,7 +217,6 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                                                                                                  X_sl_val_ts_,
                                                                                                  x_sl_stnd,
                                                                                                  y_sl_stnd)
-    #print(X_sl_tr_stnd_.shape, Y_sl_tr_stnd_.shape, X_sl_ts_stnd_.shape)
 
     # Training SL model
     # (see manuscript Section Sparse learning)
@@ -245,7 +230,6 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                                                     SL,
                                                     y_sl_stnd,
                                                     verbose = verbose)
-    #print(W_hat_.shape, Y_sl_ts_hat_.shape)
 
     # Split DL training partition in training and validation set
     # (see manuscript Section Validation, Training, and Testin
@@ -260,7 +244,6 @@ for idx_tr_, idx_ts_ in KFold(n_splits     = N_kfolds,
                                                                                                 X_dl_val_ts_,
                                                                                                 x_dl_stnd,
                                                                                                 y_dl_stnd)
-    #print(X_dl_tr_stnd_.shape, Y_dl_tr_stnd_.shape, X_dl_ts_stnd_.shape)
 
     # Traning DL recursively with a model chain
     # (see manuscript Section Bayesian Learning)
