@@ -14,7 +14,6 @@ export PATH=$PATH:/home/gterren/anaconda3/bin
 source activate oasis
 cd /home/gterren/caiso_power/software/shallow_learning
 
-#time mpirun -np 2 python -W ignore test_shallow_learning_debugging.py 1 $1 4 $2
 #time mpirun -np 2 python -W ignore val_shallow_learning.py 2 $1 2 $2
 time mpirun -np 10 python -W ignore test_shallow_learning.py $1 $2 2 0
 #time mpirun -np 2 python -W ignore model_shallow_learning.py $1

@@ -43,11 +43,11 @@ def _skGPR_fit(X_, y_, g_, param_):
     # Order 2 Polynomial kernel
     if kernel == 'poly':
         _kernel = ConstantKernel(constant_value = 1., constant_value_bounds = (1e-10, 1e10)) * DotProduct(sigma_0        = 1.,
-                                                                                                        sigma_0_bounds = (1e-10, 1e10))**degree
+                                                                                                          sigma_0_bounds = (1e-10, 1e10))**degree
     # Radial basis funtions kernel
     if kernel == 'RBF':
         _kernel = ConstantKernel(constant_value = 1., constant_value_bounds = (1e-10, 1e10)) * RBF(length_scale        = 1.,
-                                                                                                 length_scale_bounds = (1e-10, 1e10)) + WhiteKernel(noise_level = 1., noise_level_bounds = (1e-10, 1e10)) + ConstantKernel(constant_value = 1., constant_value_bounds = (1e-10, 1e10))
+                                                                                                   length_scale_bounds = (1e-10, 1e10)) + WhiteKernel(noise_level = 1., noise_level_bounds = (1e-10, 1e10)) + ConstantKernel(constant_value = 1., constant_value_bounds = (1e-10, 1e10))
     if kernel == 'RQ':
         # Rational Quadratic kernel
         _kernel = ConstantKernel(constant_value = 1., constant_value_bounds = (1e-10, 1e10)) * RationalQuadratic(length_scale        = 1.,
