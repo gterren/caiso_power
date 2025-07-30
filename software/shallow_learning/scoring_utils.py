@@ -150,7 +150,7 @@ def _IIS(Y_, M_hat_, S2_hat_):
     return np.stack([_NLPP(Y_[..., hrzn], M_hat_[..., hrzn], S2_hat_[..., hrzn]) for hrzn in range(Y_.shape[-1])])
 
 # Probabilistic forecat metrics
-def _prob_metrics(Y_, M_, S2_, Y_hat_):
+def _prob_metrics(Y_, M_, S2_, Y_hat_, headers_):
     # Independent Ignorance Score
     IIS_ = _IIS(Y_, M_, S2_)
     IIS_ = np.mean(IIS_, axis = 0)
@@ -164,7 +164,7 @@ def _prob_metrics(Y_, M_, S2_, Y_hat_):
     sIIS_ = _IIS(Y_, M_, S2_)
     sIIS_ = np.mean(sIIS_, axis = 0)
     return pd.DataFrame(np.stack([IIS_, CRPS_, sIIS_]).T, columns = ['IIS', 'CRPS', 'sample_ISS'],
-                                                          index   = ['NP15', 'SP15', 'ZP26'][:Y_.shape[1]])
+                                                          index   = headers_)
 
 # Robust logarithms of a multivariate normal distribution evaluation
 def _robust_log_eval_multivariate_normal(m_hat_, C_hat_, Y_):
@@ -176,20 +176,6 @@ def _robust_log_eval_multivariate_normal(m_hat_, C_hat_, Y_):
         epsilon = np.min(np.real(np.linalg.eigvals(C_hat_)))
         return multivariate_normal(m_hat_, C_hat_ - 10*epsilon * np.eye(C_hat_.shape[0]),
                                    allow_singular = True).logpdf(Y_)
-
-# Log-Score
-def _LogS(Y_, M_hat_, C_hat_):
-    # Multivaritate Normal Log Predictive Probability
-    def _mvNLPP(Y_, M_hat_, C_hat_):
-        N_samples = Y_.shape[0]
-        z_ = np.zeros((N_samples,))
-        for i_sample in range(N_samples):
-            #z_[i_sample] = multivariate_normal(M_hat_[i_sample, ...], Cov_hat_[i_sample, ...], allow_singular = True).logpdf(Y_[i_sample, ...])
-            z_[i_sample] = _robust_log_eval_multivariate_normal(M_hat_[i_sample, ...], C_hat_[i_sample, ...], Y_[i_sample, ...])
-        return - z_
-    # Samples / Tasks / Forecasting horizons
-    N_horizons = Y_.shape[-1]
-    return np.array([_mvNLPP(Y_[..., i_horizon], M_hat_[..., i_horizon], C_hat_[..., i_horizon]) for i_horizon in range(N_horizons)])
 
 # Log Score
 def _agg_LogS(Y_, M_hat_, C_hat_):
@@ -300,7 +286,7 @@ def _multivariate_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
                                    'LogS', 'ES', 'VS', 'IS60', 'IS80', 'IS90', 'IS95', 'IS975', 'CI60', 'CI80', 'CI90', 'CI95', 'CI975']).T
 
 # Probabilistic multivariate forecat metrics
-def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
+def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_, headers_):
     
     LogS  = 0.
     VS    = 0.
@@ -325,11 +311,16 @@ def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
     # afternoon: 8 - 15
     # evening:  16 - 23
 
-    if N_tasks < 3:
-        resource_idxs_ = [[0], [0, 1], [0]]
-    else:
-        resource_idxs_ = [[0, 2], [0, 1, 2], [0, 2]]
-    dayzone_idxs_ = [[0, 10], [10, 14], [14, 24]]
+    idx_solar_ = []
+    idx_other_ = []
+    for hearder in range(len(headers_)):
+        if 'solar' in headers_[hearder]:
+            idx_solar_.append(hearder)
+        else:
+            idx_other_.append(hearder)
+
+    resource_idxs_ = [idx_other_, sorted(idx_solar_ + idx_other_), idx_other_]
+    dayzone_idxs_  = [[0, 10], [10, 14], [14, 24]]
 
     for i in range(3):
         dayzone_idx_  = dayzone_idxs_[i]
@@ -379,7 +370,7 @@ def _multiresource_prob_metrics(Y_, M_, Cov_, S2_, Y_hat_):
 
 
 # Compute deterministic scores for sparse model
-def _sparse_det_metrics(Y_, Y_hat_):
+def _sparse_det_metrics(Y_, Y_hat_, hearders_):
     scores_ = []
     # Samples / Tasks / Forecasting horizons
     for tsk in range(Y_hat_.shape[1]):
@@ -387,11 +378,12 @@ def _sparse_det_metrics(Y_, Y_hat_):
                                   _MAE(Y_[..., tsk], Y_hat_[..., tsk]),
                                   _MBE(Y_[..., tsk], Y_hat_[..., tsk])])[..., np.newaxis])
     scores_ = np.concatenate(scores_, axis = 1).T
+    print(scores_.shape)
     return pd.DataFrame(scores_, columns = ['RMSE', 'MAE', 'MBE'],
-                                 index   = ['NP15', 'SP15', 'ZP26'][:Y_.shape[1]])
+                                 index   = hearders_)
 
 # Baselines det. error metrics
-def _baseline_det_metrics(Y_, Y_hat_):
+def _baseline_det_metrics(Y_, Y_hat_, hearders_):
     Y_p_     = []
     Y_hat_p_ = []
     for hrzn in range(Y_hat_.shape[2]):
@@ -399,16 +391,116 @@ def _baseline_det_metrics(Y_, Y_hat_):
         Y_hat_p_.append(Y_hat_[..., hrzn])
     Y_p_     = np.concatenate(Y_p_, axis = 0)
     Y_hat_p_ = np.concatenate(Y_hat_p_, axis = 0)
-    return _sparse_det_metrics(Y_p_, Y_hat_p_)
+    return _sparse_det_metrics(Y_p_, Y_hat_p_, hearders_)
+
+# Log-Score
+def _LogS(Y_, M_hat_, C_hat_):
+    # Multivaritate Normal Log Predictive Probability
+    def _mvNLPP(Y_, M_hat_, C_hat_):
+        N_samples = Y_.shape[0]
+        z_ = np.zeros((N_samples,))
+        for i_sample in range(N_samples):
+            #z_[i_sample] = multivariate_normal(M_hat_[i_sample, ...], Cov_hat_[i_sample, ...], allow_singular = True).logpdf(Y_[i_sample, ...])
+            z_[i_sample] = _robust_log_eval_multivariate_normal(M_hat_[i_sample, ...], C_hat_[i_sample, ...], Y_[i_sample, ...])
+        return - z_
+    # Samples / Tasks / Forecasting horizons
+    N_horizons = Y_.shape[-1]
+    return np.array([_mvNLPP(Y_[..., i_horizon], M_hat_[..., i_horizon], C_hat_[..., i_horizon]) for i_horizon in range(N_horizons)])
+
+# Probabilistic multivariate forecat metrics
+def _multivariate_prob_metrics_dist(Y_, M_, Cov_, S2_, Y_hat_):
+
+    N_samples  = M_.shape[0]
+    N_tasks    = M_.shape[1]
+    N_horizons = M_.shape[2]
+
+    df_ = pd.DataFrame()
+    print(_LogS(Y_, M_, Cov_).shape, _ES(Y_, Y_hat_).shape, _VS(Y_, Y_hat_).shape)
+    print(_ES_spatial(Y_, Y_hat_).shape, _VS_spatial(Y_, Y_hat_).shape, _ES_temporal(Y_, Y_hat_).shape, _VS_temporal(Y_, Y_hat_).shape)
+    print(_interval_score(Y_, M_, S2_, z = 1.959, alpha = 0.05).shape)
+    print(_interval_score(Y_, M_, S2_, z = 1.645, alpha = 0.1).shape)
+
+    # Ignorance Score
+    df_['LogS'] = np.sum(_LogS(Y_, M_, Cov_), axis = 0)/(N_tasks*N_horizons)
+    # Energy and variogram Score computed in the spatial dimensions
+    df_['ES'] = _ES(Y_, Y_hat_)/(N_tasks*N_horizons)
+    df_['VS'] = _VS(Y_, Y_hat_)/(N_tasks*N_horizons)
+    # 95% Ignorance Score
+    df_['IS95'] = _interval_score(Y_, M_, S2_, z     = 1.959,
+                                               alpha = 0.05)
+    # 90% Ignorance Score
+    df_['IS90'] = _interval_score(Y_, M_, S2_, z     = 1.645,
+                                               alpha = 0.1)
+    return df_.reset_index(drop = True)
+
+# Probabilistic multivariate forecat metrics
+def _multisource_prob_metrics_dist(Y_, M_, Cov_, S2_, Y_hat_):
+
+    N_samples  = M_.shape[0]
+    N_tasks    = M_.shape[1]
+    N_horizons = M_.shape[2]
+
+    # Exclude solar time series from morning and evening horizons
+    # morning:   0 - 7
+    # afternoon: 8 - 15
+    # evening:  16 - 23
+
+    if N_tasks < 3:
+        resource_idxs_ = [[0], [0, 1], [0]]
+    else:
+        resource_idxs_ = [[0, 2], [0, 1, 2], [0, 2]]
+    dayzone_idxs_ = [[0, 10], [10, 14], [14, 24]]
+
+    LogS_ = np.zeros((N_samples,))
+    ES_   = np.zeros((N_samples,))
+    VS_   = np.zeros((N_samples,))
+    IS95_ = np.zeros((N_samples,))
+    IS90_ = np.zeros((N_samples,))
+    N_dim = 0
+    
+    for i in range(3):
+        dayzone_idx_  = dayzone_idxs_[i]
+        resource_idx_ = resource_idxs_[i]
+
+        Y_p_     = Y_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
+        M_p_     = M_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
+        Cov_p_   = Cov_[..., resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
+        Cov_p_   = Cov_p_[:, resource_idx_, ...]
+        S2_p_    = S2_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1]].copy()
+        Y_hat_p_ = Y_hat_[:, resource_idx_, dayzone_idx_[0]:dayzone_idx_[1], :].copy()
+
+        # Number of evaluated dimension
+        N_dim += len(resource_idx_)*(dayzone_idx_[1] - dayzone_idx_[0])
+        # Logarithmic Score
+        LogS_ += np.sum(_LogS(Y_p_, M_p_, Cov_p_), axis = 0)
+        # Energy Score
+        ES_ += _ES(Y_p_, Y_hat_p_)
+        # Variogram Score
+        VS_ += _VS(Y_p_, Y_hat_p_)
+        # 95% Ignorance Score
+        IS95_ += _interval_score(Y_p_, M_p_, S2_p_, z     = 1.959,
+                                                    alpha = 0.05)
+        # 90% Ignorance Score
+        IS90_ += _interval_score(Y_p_, M_p_, S2_p_, z     = 1.645,
+                                                    alpha = 0.1)
+
+    # Expected scores
+    df_         = pd.DataFrame()
+    df_['LogS'] = LogS_/N_dim
+    df_['ES']   = ES_/N_dim
+    df_['VS']   = VS_/N_dim
+    df_['IS95'] = IS95_/N_dim
+    df_['IS90'] = IS90_/N_dim
+
+    return df_.reset_index(drop = True)
 
 # Baselines det. error metrics
-def _baseline_det_metrics_dist(Y_, Y_hat_, model):
-    zones_  = ['NP15', 'SP15', 'ZP26']
+def _baseline_det_metrics_dist(Y_, Y_hat_, headers_, model):
     scores_ = []
     for smpl in range(Y_hat_.shape[0]):
         for tsk in range(Y_hat_.shape[1]):
             score_ = [smpl,
-                      zones_[tsk],
+                      headers_[tsk],
                       model,
                       _RMSE(Y_[smpl, tsk, ...], Y_hat_[smpl, tsk, ...]),
                       _MAE(Y_[smpl, tsk, ...], Y_hat_[smpl, tsk, ...]),
@@ -504,6 +596,8 @@ __all__ = ['_RMSE',
            '_baseline_det_metrics',
            '_prob_metrics',
            '_multivariate_prob_metrics',
+           '_multivariate_prob_metrics_dist',
+           '_multisource_prob_metrics_dist',
            '_multiresource_prob_metrics',
            '_baseline_det_metrics_dist',
            '_calibrate_scenarios_temporal_structure_fit',

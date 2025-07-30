@@ -1,8 +1,8 @@
 # No. Batches
-for A in 0 1 2; do
-	for B in 1; do
-	  for C in {0..34}; do
-  		sbatch run.job $A $B $C;
+for A in 3; do
+	for B in 0 1; do
+	  for C in {0..39}; do
+  	  sbatch run.job $A $B $C;
   		sleep 5s;
   	done;
 	done;
@@ -20,7 +20,7 @@ for A in 2; do
 	done;
 done;
 
-for A in {0..2}; do
+for A in 0; do
 	for B in {0..59}; do
   	sbatch run.job $A $B;
   	sleep 5s;
@@ -28,7 +28,7 @@ for A in {0..2}; do
 done;
 
 # No. Batches
-for A in 0 1 2 3; do
+for A in {0..59}; do
 	sbatch run.job $A;
   sleep 5s;
 done;

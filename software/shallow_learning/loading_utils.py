@@ -351,7 +351,6 @@ def _load_processed_dataset(dataset, path):
 
     return X_sl_, Y_sl_, g_sl_, X_dl_, Y_dl_, g_dl_, Z_, ZZ_, Y_ac_, Y_fc_
 
-
 # Save data in a pickle file
 def _save_dict(_data, path, file_name):
     with open(path + file_name, 'wb') as _handle:
